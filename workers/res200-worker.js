@@ -21,13 +21,13 @@ export default {
       });
 
       // 첫 번째 fetch 호출 (리디렉션을 수동으로 처리)
-      let response = await fetch(proxiedRequest, {
-        redirect: "manual", // 중요: 리디렉션을 자동으로 따라가지 않음
-      });
-        return new Response(JSON.stringify(response), {
-          status: response.status,
-          headers: { 'Content-Type': 'application/json' },
-        });
+    //   let response = await fetch(proxiedRequest, {
+    //     redirect: "manual", // 중요: 리디렉션을 자동으로 따라가지 않음
+    //   });
+    return new Response(JSON.stringify(proxiedRequest), {
+        status: response.status,
+        headers: { 'Content-Type': 'application/json' },
+    });
       // 응답 코드가 300-399 범위의 리디렉션인지 확인
     //   if (response.status >= 300 && response.status < 400) {
     //     const location = response.headers.get('Location');
