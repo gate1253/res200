@@ -4,9 +4,9 @@ export default {
     const targetBaseUrl = env.TARGET_URL;
     
     // TARGET_URL이 슬래시로 끝나지 않으면 추가
-    const initialUrl = targetBaseUrl.endsWith('/') 
-      ? `${targetBaseUrl}${url.pathname.substring(1)}${url.search}`
-      : `${targetBaseUrl}${url.pathname}${url.search}`;
+    // const initialUrl = targetBaseUrl.endsWith('/') 
+    //   ? `${targetBaseUrl}${url.pathname.substring(1)}${url.search}`
+    //   : `${targetBaseUrl}${url.pathname}${url.search}`;
 
     try {
       // const response = await fetch(initialUrl, { // fetch 호출 주석 처리
