@@ -15,9 +15,11 @@ export default {
       newHeaders.set('Host', targetHost);
 
       // 원본 Request 객체를 기반으로 새 Request 객체 생성 (초기 프록시 요청)
-      const proxiedRequest = new Request(request, {
-        url: initialUrl, // 프록시할 최종 URL
+      // request.url 대신 initialUrl을 직접 사용하고, 원본 요청의 method, headers, body를 명시적으로 전달
+      const proxiedRequest = new Request(initialUrl, {
+        method: request.method,
         headers: newHeaders, // 수정된 헤더 (Host 포함)
+        body: request.body, // 원본 요청 본문 전달 (GET/HEAD 요청에는 null)
       });
 
       // 첫 번째 fetch 호출 (리디렉션을 수동으로 처리)
