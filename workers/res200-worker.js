@@ -1,7 +1,7 @@
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const targetBaseUrl = "https://play.wecandeo.com"; //env.TARGET_URL; // 환경 변수 사용으로 되돌림
+    const targetBaseUrl = "https://play.test.wecandeo.com"; //env.TARGET_URL; // 환경 변수 사용으로 되돌림
     
     // TARGET_URL이 슬래시로 끝나지 않으면 추가
     const initialUrl = targetBaseUrl.endsWith('/') 
