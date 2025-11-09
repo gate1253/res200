@@ -14,13 +14,14 @@ export default {
       const targetHost = new URL(targetBaseUrl).host;
       newHeaders.set('Host', targetHost);
 
+      request.url = initialUrl; // 디버깅을 위해 URL 설정
+
       // 원본 Request 객체를 기반으로 새 Request 객체 생성 (초기 프록시 요청)
       const proxiedRequest = new Request(request, {
         url: initialUrl, // 프록시할 최종 URL
         headers: newHeaders, // 수정된 헤더 (Host 포함)
       });
-      proxiedRequest.url = initialUrl; // 디버깅을 위해 URL 설정
-      
+
       // 첫 번째 fetch 호출 (리디렉션을 수동으로 처리)
       let response = await fetch(proxiedRequest, { // fetch 호출 활성화
         redirect: "manual", // 중요: 리디렉션을 자동으로 따라가지 않음
