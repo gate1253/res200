@@ -1,18 +1,26 @@
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const targetBaseUrl = "https://api.wecandeo.com/video/default/BOKNS9AQWrGT5IIiim2awmI7Pwlv2KLJisUGc2z5QFMMx0yFii4AvgYhgieie";//env.TARGET_URL;
+    const targetBaseUrl = env.TARGET_URL; // 환경 변수 사용으로 되돌림
     
     // TARGET_URL이 슬래시로 끝나지 않으면 추가
-    const initialUrl = targetBaseUrl;
-    // const initialUrl = targetBaseUrl.endsWith('/') 
-    //   ? `${targetBaseUrl}${url.pathname.substring(1)}${url.search}`
-    //   : `${targetBaseUrl}${url.pathname}${url.search}`;
+    const initialUrl = targetBaseUrl.endsWith('/') 
+      ? `${targetBaseUrl}${url.pathname.substring(1)}${url.search}`
+      : `${targetBaseUrl}${url.pathname}${url.search}`;
 
     try {
+      // 원본 요청 헤더를 복사하고 Host 헤더를 targetBaseUrl의 호스트로 설정
+      const newHeaders = new Headers(request.headers);
+      const targetHost = new URL(targetBaseUrl).host;
+      newHeaders.set('Host', targetHost);
+
       // 원본 Request 객체를 기반으로 새 Request 객체 생성 (초기 프록시 요청)
-      // initialUrl만으로 호출 (기본적으로 GET 메서드, 헤더/본문 없음)
-      const proxiedRequest = new Request(initialUrl);
+      // initialUrl을 사용하고, 원본 요청의 method, headers, body를 명시적으로 전달
+      const proxiedRequest = new Request(initialUrl, {
+        method: request.method, // 원본 요청 메서드 전달
+        headers: newHeaders, // 수정된 헤더 (Host 포함)
+        body: request.body, // 원본 요청 본문 전달 (GET/HEAD 요청에는 null)
+      });
 
       // 첫 번째 fetch 호출 (리디렉션을 수동으로 처리)
       let response = await fetch(proxiedRequest, {
