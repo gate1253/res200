@@ -9,17 +9,9 @@ export default {
       : `${targetBaseUrl}${url.pathname}${url.search}`;
 
     try {
-      // 원본 요청 헤더를 복사하고 Host 헤더를 targetBaseUrl의 호스트로 설정
-      const newHeaders = new Headers(request.headers);
-      const targetHost = new URL(targetBaseUrl).host;
-      newHeaders.set('Host', targetHost);
-
       // 원본 Request 객체를 기반으로 새 Request 객체 생성 (초기 프록시 요청)
-      const proxiedRequest = new Request(initialUrl, {
-        method: request.method,
-        headers: newHeaders, // 수정된 헤더 (Host 포함)
-        body: request.body, // 원본 요청 본문 전달 (GET/HEAD 요청에는 null)
-      });
+      // initialUrl만으로 호출 (기본적으로 GET 메서드, 헤더/본문 없음)
+      const proxiedRequest = new Request(initialUrl);
 
       // 첫 번째 fetch 호출 (리디렉션을 수동으로 처리)
       let response = await fetch(proxiedRequest, {
