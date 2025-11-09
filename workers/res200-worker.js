@@ -24,10 +24,19 @@ export default {
     //   let response = await fetch(proxiedRequest, {
     //     redirect: "manual", // 중요: 리디렉션을 자동으로 따라가지 않음
     //   });
-    return new Response(JSON.stringify(proxiedRequest), {
+
+      // proxiedRequest의 디버깅 정보를 JSON으로 출력
+      const debugInfo = {
+        url: proxiedRequest.url,
+        method: proxiedRequest.method,
+        headers: Object.fromEntries(proxiedRequest.headers.entries()), // Headers 객체를 일반 객체로 변환
+        // body는 스트림이므로 직접 출력하기 어려움
+      };
+
+      return new Response(JSON.stringify(debugInfo, null, 2), { // 가독성을 위해 null, 2 추가
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-    });
+      });
       // 응답 코드가 300-399 범위의 리디렉션인지 확인
     //   if (response.status >= 300 && response.status < 400) {
     //     const location = response.headers.get('Location');
