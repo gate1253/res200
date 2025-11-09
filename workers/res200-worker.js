@@ -9,9 +9,14 @@ export default {
       : `${targetBaseUrl}${url.pathname}${url.search}`;
 
     try {
+      // 원본 요청 헤더를 복사하고 Host 헤더를 targetBaseUrl의 호스트로 설정
+      const newHeaders = new Headers(request.headers);
+      const targetHost = new URL(targetBaseUrl).host;
+      newHeaders.set('Host', targetHost);
+
       const response = await fetch(initialUrl, { // fetch 호출 주석 해제
         method: request.method, // 원본 요청 메서드 전달
-        headers: request.headers, // 원본 요청 헤더 전달
+        headers: newHeaders, // 수정된 헤더 전달
         body: request.body, // 원본 요청 본문 전달 (GET/HEAD 요청에는 null)
         redirect: "follow", // 중요: 리디렉션을 자동으로 따라감
       });
@@ -24,12 +29,8 @@ export default {
         });
       }
       
-    //   return response; // 정상 응답 반환
+      return response; // 정상 응답 반환
 
-      // targetBaseUrl을 JSON으로 응답 (이전 코드 주석 처리)
-    //   return new Response(JSON.stringify({ targetUrl: initialUrl }), {
-    //     headers: { 'Content-Type': 'application/json' },
-    //   });
     } catch (error) {
       console.error("Error fetching initial URL:", error);
       return new Response("Internal Server Error", { status: 500 }); // 오류 메시지 정리
