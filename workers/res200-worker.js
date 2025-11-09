@@ -4,9 +4,10 @@ export default {
     const targetBaseUrl = "https://www.google.com"; //env.TARGET_URL;
     
     // TARGET_URL이 슬래시로 끝나지 않으면 추가
-    const initialUrl = targetBaseUrl.endsWith('/') 
-      ? `${targetBaseUrl}${url.pathname.substring(1)}${url.search}`
-      : `${targetBaseUrl}${url.pathname}${url.search}`;
+    const initialUrl = targetBaseUrl;
+    // const initialUrl = targetBaseUrl.endsWith('/') 
+    //   ? `${targetBaseUrl}${url.pathname.substring(1)}${url.search}`
+    //   : `${targetBaseUrl}${url.pathname}${url.search}`;
 
     try {
       // 원본 Request 객체를 기반으로 새 Request 객체 생성 (초기 프록시 요청)
