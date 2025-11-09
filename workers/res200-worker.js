@@ -24,7 +24,7 @@ export default {
 
       // 첫 번째 fetch 호출 (리디렉션을 수동으로 처리)
       let response = await fetch(proxiedRequest, {
-        redirect: "manual", // 중요: 리디렉션을 자동으로 따라가지 않음
+        redirect: "follow", // 중요: 리디렉션을 자동으로 따라가지 않음
       });
 
       // --- 디버깅을 위한 임시 로직 시작 ---
