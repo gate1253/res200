@@ -9,18 +9,18 @@ export default {
       : `${targetBaseUrl}${url.pathname}${url.search}`;
 
     try {
-      const response = await fetch(initialUrl, { // fetch 호출 주석 처리
-        method: request.method, // 원본 요청 메서드 전달
-        headers: request.headers, // 원본 요청 헤더 전달
-        body: request.body, // 원본 요청 본문 전달 (GET/HEAD 요청에는 null)
-        redirect: "follow", // 중요: 리디렉션을 자동으로 따라감
-      });
-      return response;
+    //   const response = await fetch(initialUrl, { // fetch 호출 주석 처리
+    //     method: request.method, // 원본 요청 메서드 전달
+    //     headers: request.headers, // 원본 요청 헤더 전달
+    //     body: request.body, // 원본 요청 본문 전달 (GET/HEAD 요청에는 null)
+    //     redirect: "follow", // 중요: 리디렉션을 자동으로 따라감
+    //   });
+    //   return response;
 
       // targetBaseUrl을 JSON으로 응답
-      //   return new Response(JSON.stringify({ targetUrl: targetBaseUrl }), {
-      //     headers: { 'Content-Type': 'application/json' },
-      //   });
+        return new Response(JSON.stringify({ targetUrl: targetBaseUrl }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
     } catch (error) {
       console.error("Error fetching initial URL:", error);
       return new Response("Internal Server Error" + error, { status: 500 });
