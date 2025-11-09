@@ -8,7 +8,13 @@ export interface Env {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const initialUrl = env.TARGET_URL; // 환경 변수에서 URL 가져오기
+    const url = new URL(request.url);
+    const targetBaseUrl = env.TARGET_URL;
+    
+    // TARGET_URL이 슬래시로 끝나지 않으면 추가
+    const initialUrl = targetBaseUrl.endsWith('/') 
+      ? `${targetBaseUrl}${url.pathname.substring(1)}${url.search}`
+      : `${targetBaseUrl}${url.pathname}${url.search}`;
 
     try {
       const response = await fetch(initialUrl, {
