@@ -1,4 +1,4 @@
-name = "res200-worker"
+name = "res200"
 main = "workers/res200-worker.js"
 compatibility_date = "2024-05-29"
 workers_dev = true
