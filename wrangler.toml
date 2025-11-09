@@ -4,4 +4,4 @@ compatibility_date = "2024-05-29"
 workers_dev = true
 
 [vars]
-TARGET_URL = "" # Cloudflare 환경 변수로 등록될 TARGET_URL. GitHub Actions에서 실제 값으로 덮어쓰여집니다.
+TARGET_URL = "${TARGET_URL}" # Cloudflare 환경 변수로 등록될 TARGET_URL. GitHub Actions에서 실제 값으로 덮어쓰여집니다.
