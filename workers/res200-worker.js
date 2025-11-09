@@ -14,8 +14,6 @@ export default {
       const targetHost = new URL(targetBaseUrl).host;
       newHeaders.set('Host', targetHost);
 
-      request.url = initialUrl; // 디버깅을 위해 URL 설정
-
       // 원본 Request 객체를 기반으로 새 Request 객체 생성 (초기 프록시 요청)
       const proxiedRequest = new Request(request, {
         url: initialUrl, // 프록시할 최종 URL
@@ -29,6 +27,7 @@ export default {
 
       // proxiedRequest 및 response의 디버깅 정보를 JSON으로 출력
       const debugInfo = {
+        initialUrl: initialUrl,
         proxiedRequest: {
           url: proxiedRequest.url,
           method: proxiedRequest.method,
