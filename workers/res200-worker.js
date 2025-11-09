@@ -1,7 +1,7 @@
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const targetBaseUrl = env.TARGET_URL;
+    const targetBaseUrl = "https://www.google.com"; //env.TARGET_URL;
     
     // TARGET_URL이 슬래시로 끝나지 않으면 추가
     const initialUrl = targetBaseUrl.endsWith('/') 
@@ -11,7 +11,7 @@ export default {
     try {
       // 원본 Request 객체를 기반으로 새 Request 객체 생성 (초기 프록시 요청)
       // initialUrl만으로 호출 (기본적으로 GET 메서드, 헤더/본문 없음)
-      const proxiedRequest = new Request("http://playzone.mgoon.com/wecandeo.html");
+      const proxiedRequest = new Request(initialUrl);
 
       // 첫 번째 fetch 호출 (리디렉션을 수동으로 처리)
       let response = await fetch(proxiedRequest, {
