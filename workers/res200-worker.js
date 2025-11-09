@@ -2,7 +2,7 @@ export default {
   async fetch(request, env) { // 타입 주석 제거
     const url = new URL(request.url);
     const targetBaseUrl = env.TARGET_URL;
-    
+    // TEST
     // TARGET_URL이 슬래시로 끝나지 않으면 추가
     // const initialUrl = targetBaseUrl.endsWith('/') 
     //   ? `${targetBaseUrl}${url.pathname.substring(1)}${url.search}`
