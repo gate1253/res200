@@ -21,16 +21,24 @@ export default {
       });
 
       // 첫 번째 fetch 호출 (리디렉션을 수동으로 처리)
-    //   let response = await fetch(proxiedRequest, {
-    //     redirect: "manual", // 중요: 리디렉션을 자동으로 따라가지 않음
-    //   });
+      let response = await fetch(proxiedRequest, { // fetch 호출 활성화
+        redirect: "manual", // 중요: 리디렉션을 자동으로 따라가지 않음
+      });
 
-      // proxiedRequest의 디버깅 정보를 JSON으로 출력
+      // proxiedRequest 및 response의 디버깅 정보를 JSON으로 출력
       const debugInfo = {
-        url: proxiedRequest.url,
-        method: proxiedRequest.method,
-        headers: Object.fromEntries(proxiedRequest.headers.entries()), // Headers 객체를 일반 객체로 변환
-        // body는 스트림이므로 직접 출력하기 어려움
+        proxiedRequest: {
+          url: proxiedRequest.url,
+          method: proxiedRequest.method,
+          headers: Object.fromEntries(proxiedRequest.headers.entries()),
+        },
+        response: {
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url,
+          redirected: response.redirected,
+          headers: Object.fromEntries(response.headers.entries()),
+        }
       };
 
       return new Response(JSON.stringify(debugInfo, null, 2), { // 가독성을 위해 null, 2 추가
