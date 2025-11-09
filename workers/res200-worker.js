@@ -1,7 +1,7 @@
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const targetBaseUrl = "https://www.google.com"; //env.TARGET_URL;
+    const targetBaseUrl = "https://gate1253.pages.dev"; //env.TARGET_URL;
     
     // TARGET_URL이 슬래시로 끝나지 않으면 추가
     const initialUrl = targetBaseUrl;
