@@ -1,7 +1,7 @@
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const targetBaseUrl = "https://pluto90k.v4.wecandeotest.com/video/file/default/3ii2EourkpisAaXJq1zXqAkssnipii65teNf";//env.TARGET_URL;
+    const targetBaseUrl = "https://api.wecandeo.com/video/default/BOKNS9AQWrGT5IIiim2awmI7Pwlv2KLJisUGc2z5QFMMx0yFii4AvgYhgieie";//env.TARGET_URL;
     
     // TARGET_URL이 슬래시로 끝나지 않으면 추가
     const initialUrl = targetBaseUrl;
