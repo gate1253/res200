@@ -54,8 +54,25 @@ export default {
 
       // 응답 코드가 400 이상이면 JSON으로 400 ERROR 응답
       if (response.status >= 400) {
-        return new Response(JSON.stringify({ error: "400 ERROR", status: response.status }), {
-          status: response.status,
+        // 4xx/5xx 응답에 대한 상세 디버깅 정보 추가
+        const debugErrorResponse = {
+          error: "Received an error response (4xx/5xx)",
+          initialUrl: initialUrl,
+          proxiedRequest: {
+            url: proxiedRequest.url,
+            method: proxiedRequest.method,
+            headers: Object.fromEntries(proxiedRequest.headers.entries()),
+          },
+          errorResponse: {
+            status: response.status,
+            statusText: response.statusText,
+            url: response.url,
+            headers: Object.fromEntries(response.headers.entries()),
+            // 본문은 스트림이므로 직접 포함하기 어려움. 필요시 response.text() 등으로 비동기 처리 필요.
+          }
+        };
+        return new Response(JSON.stringify(debugErrorResponse, null, 2), {
+          status: response.status, // 실제 오류 상태 코드 반환
           headers: { 'Content-Type': 'application/json' },
         });
       }
