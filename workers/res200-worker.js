@@ -14,10 +14,14 @@ export default {
       const targetHost = new URL(targetBaseUrl).host;
       newHeaders.set('Host', targetHost);
 
-      const response = await fetch(initialUrl, { // fetch 호출 주석 해제
-        method: request.method, // 원본 요청 메서드 전달
-        headers: newHeaders, // 수정된 헤더 전달
-        body: request.body, // 원본 요청 본문 전달 (GET/HEAD 요청에는 null)
+      // 원본 Request 객체를 기반으로 새 Request 객체 생성
+      // URL과 헤더를 변경하고, 메서드 및 본문은 원본 Request에서 상속
+      const proxiedRequest = new Request(request, {
+        url: initialUrl, // 프록시할 최종 URL
+        headers: newHeaders, // 수정된 헤더 (Host 포함)
+      });
+
+      const response = await fetch(proxiedRequest, { // 수정된 Request 객체로 fetch 호출
         redirect: "follow", // 중요: 리디렉션을 자동으로 따라감
       });
 
