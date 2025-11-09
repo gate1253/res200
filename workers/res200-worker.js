@@ -25,7 +25,7 @@ export default {
     //     redirect: "manual", // 중요: 리디렉션을 자동으로 따라가지 않음
     //   });
     return new Response(JSON.stringify(proxiedRequest), {
-        status: response.status,
+        status: 200,
         headers: { 'Content-Type': 'application/json' },
     });
       // 응답 코드가 300-399 범위의 리디렉션인지 확인
