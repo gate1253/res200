@@ -21,9 +21,8 @@ jobs:
         run: npm install -g wrangler
 
       - name: Cloudflare Workers에 배포
-        run: wrangler deploy --minify --name ${{ secrets.WORKER_NAME }} --env TARGET_URL="${{ secrets.TARGET_URL }}"
+        run: wrangler deploy --name ${{ secrets.WORKER_NAME }}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # TARGET_URL은 이제 run 명령의 --env 플래그를 통해 전달되므로 여기서 제거하거나 주석 처리할 수 있습니다.
-          # TARGET_URL: ${{ secrets.TARGET_URL }}
+          TARGET_URL: ${{ secrets.TARGET_URL }}
