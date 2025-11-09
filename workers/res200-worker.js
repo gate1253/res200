@@ -11,8 +11,8 @@ export default {
     try {
       // 원본 요청 헤더를 복사하고 Host 헤더를 targetBaseUrl의 호스트로 설정
       const newHeaders = new Headers(request.headers);
-      const targetHost = new URL(targetBaseUrl).host;
-      newHeaders.set('Host', targetHost);
+    //   const targetHost = new URL(targetBaseUrl).host;
+    //   newHeaders.set('Host', targetHost);
 
       // 원본 Request 객체를 기반으로 새 Request 객체 생성 (초기 프록시 요청)
       // request.url 대신 initialUrl을 직접 사용하고, 원본 요청의 method, headers, body를 명시적으로 전달
