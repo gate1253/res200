@@ -45,7 +45,7 @@ export async function handleRequest(request, env){
 			const target = await env.RES302_KV.get(targetCode);
 			if(target){
 				// URL을 찾으면 200 OK와 함께 JSON 응답으로 반환
-				return jsonResponse({ url: target }, 200);
+				return new Response(null, {status:302, headers: Object.assign({Location: target}, corsHeaders())});
 			}
 		}
 		// URL을 찾지 못했거나 패턴에 맞지 않는 경우
