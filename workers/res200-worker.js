@@ -53,7 +53,7 @@ export async function handleRequest(request, env){
 	}
 	
 	// GET 요청이 아니거나, GET 요청이지만 커스텀 코드 패턴이 아닌 경우
-	return new Response('Not found', {status:404, headers: corsHeaders()});
+	return new Response(`Not found ${request.method} ${pathname}`, {status:404, headers: corsHeaders()});
 }
 
 export default {
