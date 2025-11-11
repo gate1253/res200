@@ -8,19 +8,54 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    name: Deploy
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Wrangler 설치
-        run: npm install -g wrangler
-        
-      - name: Publish Worker
-        uses: cloudflare/wrangler-action@v3
+      - name: Setup Node.js (use Node 20 to satisfy wrangler engine)
+        uses: actions/setup-node@v3
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # wrangler publish 명령을 사용하여 RES302_KV 네임스페이스를 바인딩합니다.
-          # GitHub 저장소 설정에서 RES302_KV_ID 시크릿을 생성해야 합니다.
-          command: wrangler publish --kv RES302_KV=${{ secrets.CF_KV_NAMESPACE_ID }}
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Show Node / npm versions (debug)
+        run: |
+          node -v
+          npm -v
+
+      - name: Set Git user (optional)
+        run: |
+          git config --global user.name "${{ secrets.GIT_USER_NAME || 'github-actions[bot]' }}"
+          git config --global user.email "${{ secrets.GIT_USER_EMAIL || 'github-actions[bot]@users.noreply.github.com' }}"
+
+      - name: Create wrangler.toml from secrets
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+        run: |
+          # Use unquoted heredoc to allow shell variable expansion
+          cat > wrangler.toml <<EOF
+          name = "res200"
+          main = "workers/res200-worker.js"
+          type = "module"
+          compatibility_date = "2025-11-08"
+          account_id = "${CF_ACCOUNT_ID}"
+          kv_namespaces = [
+            { binding = "RES302_KV", id = "${CF_KV_NAMESPACE_ID}" }
+          ]
+          EOF
+          echo "wrangler.toml created."
+          echo "---- wrangler.toml ----"
+          sed -n '1,200p' wrangler.toml || true
+
+      - name: Install wrangler CLI and publish
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          # install wrangler globally (Node 20)
+          npm install -g wrangler
+          wrangler --version
+
+          # deploy (wrangler reads CLOUDFLARE_API_TOKEN from env)
+          wrangler deploy
