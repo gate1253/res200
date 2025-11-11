@@ -49,7 +49,7 @@ export async function handleRequest(request, env){
 			}
 		}
 		// URL을 찾지 못했거나 패턴에 맞지 않는 경우
-		return new Response('Not found', {status:404, headers: corsHeaders()});
+		return new Response(`Not found ${pathSegments}`, {status:404, headers: corsHeaders()});
 	}
 	
 	// GET 요청이 아니거나, GET 요청이지만 커스텀 코드 패턴이 아닌 경우
