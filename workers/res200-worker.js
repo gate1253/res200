@@ -43,6 +43,20 @@ export async function handleRequest(request, env){
 		if (targetCode) {
 			const target = await env.RES302_KV.get(targetCode);
 			if(target){
+
+				// 추가: R1 타입의 만료 시간 확인
+				const expirationTimestamp = await env.REQ_TIME_KV.get(targetCode);
+				
+				if (expirationTimestamp) {
+					const expirationTime = parseInt(expirationTimestamp, 10);
+					const currentTime = Date.now();
+
+					// 현재 시간이 만료 시간보다 크면, 링크는 만료된 것입니다.
+					if (currentTime > expirationTime) {
+						return new Response('Forbidden: This link has expired.', { status: 403, headers: corsHeaders() });
+					}
+				}
+
 				let finalTarget = target;
 				const url = new URL(target);
 
