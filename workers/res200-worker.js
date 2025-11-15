@@ -41,11 +41,29 @@ export async function handleRequest(request, env){
 		// 그 외의 경우 (예: /{code} 패턴 또는 유효하지 않은 커스텀 코드 패턴)는 처리하지 않음
 
 		if (targetCode) {
-			// RES302_KV에서 URL 조회
 			const target = await env.RES302_KV.get(targetCode);
 			if(target){
-				// URL을 찾으면 200 OK와 함께 JSON 응답으로 반환
-				return new Response(null, {status:302, headers: Object.assign({Location: target}, corsHeaders())});
+				let finalTarget = target;
+				const url = new URL(target);
+
+				// target URL의 쿼리스트링에 'cnt=${cnt}'가 있는지 확인합니다.
+				if (url.searchParams.get('cnt') === '${cnt}') {
+					// REQ_COUNT_KV에서 현재 카운트를 가져옵니다. 없으면 0으로 시작합니다.
+					let count = await env.REQ_COUNT_KV.get(targetCode);
+					count = count ? parseInt(count, 10) : 0;
+
+					// 카운트를 1 증가시킵니다.
+					const newCount = count + 1;
+
+					// 증가된 카운트를 KV에 다시 저장합니다.
+					await env.REQ_COUNT_KV.put(targetCode, newCount.toString());
+
+					// URL의 'cnt' 파라미터 값을 새로운 카운트로 교체합니다.
+					url.searchParams.set('cnt', newCount);
+					finalTarget = url.toString();
+				}
+
+				return new Response(null, {status:302, headers: Object.assign({Location: finalTarget}, corsHeaders())});
 			}
 		}
 		// URL을 찾지 못했거나 패턴에 맞지 않는 경우
