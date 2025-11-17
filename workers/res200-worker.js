@@ -60,7 +60,7 @@ export async function handleRequest(request, env){
 </head>
 <body>
   <div id="player"></div>
-  <script defer src="https://gate1234.pages.dev/public/malgnPlayer.js"></script>
+  <script defer src="https://gate1253.pages.dev/public/malgnPlayer.js"></script>
   <script>
     window.onload = function () {
       malgnPlayer.setup({
