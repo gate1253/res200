@@ -48,30 +48,31 @@ export async function handleRequest(request, env){
 				if (url.searchParams.get('with') === 'play' && url.searchParams.get('type') === 'html') {
 					const html = `
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
+<meta charset="UTF-8">
 <title>Play Content</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script defer src="https://gate1234.pages.dev/public/malgnPlayer.js"></script>
-<script>
-      let _player;
-      window.onload = function () {
-        malgnPlayer.setup({
-          targetID: "player",
-          video: {
-            primaryKey: "33333",
-            title: "test",
-            thumbnail: "",
-            // 단일 파일 설정 ( HLS & MPD 는 파일내 화질 정보를 사용합니다. )
-            source: "${target}"
-          }
-        });
 <style>
   body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
-  iframe { width: 100%; height: 100%; border: none; }
+  #player { width: 100%; height: 100%; }
 </style>
 </head>
 <body>
+  <div id="player"></div>
+  <script defer src="https://gate1234.pages.dev/public/malgnPlayer.js"></script>
+  <script>
+    window.onload = function () {
+      malgnPlayer.setup({
+        targetID: "player",
+        video: {
+          primaryKey: "33333", // 필요시 동적으로 변경 가능
+          title: "Video Content", // 필요시 동적으로 변경 가능
+          source: "${target}"
+        }
+      });
+    };
+  </script>
 </body>
 </html>`;
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
@@ -91,10 +92,10 @@ export async function handleRequest(request, env){
 				}
 
 				let finalTarget = target;
-				const url = new URL(target);
+				const targetUrl = new URL(target);
 
 				// target URL의 쿼리스트링에 'cnt=${cnt}'가 있는지 확인합니다.
-				if (url.searchParams.get('cnt') === '${cnt}') {
+				if (targetUrl.searchParams.get('cnt') === '${cnt}') {
 					// REQ_COUNT_KV에서 현재 카운트를 가져옵니다. 없으면 0으로 시작합니다.
 					let count = await env.REQ_COUNT_KV.get(targetCode);
 					count = count ? parseInt(count, 10) : 0;
@@ -106,8 +107,8 @@ export async function handleRequest(request, env){
 					await env.REQ_COUNT_KV.put(targetCode, newCount.toString());
 
 					// URL의 'cnt' 파라미터 값을 새로운 카운트로 교체합니다.
-					url.searchParams.set('cnt', newCount);
-					finalTarget = url.toString();
+					targetUrl.searchParams.set('cnt', newCount);
+					finalTarget = targetUrl.toString();
 				}
 
 				return new Response(null, {status:302, headers: Object.assign({Location: finalTarget}, corsHeaders())});
