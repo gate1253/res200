@@ -44,6 +44,39 @@ export async function handleRequest(request, env){
 			const target = await env.RES302_KV.get(targetCode);
 			if(target){
 
+				// 요청 URL의 쿼리스트링에 with=play, type=html 이 있는 경우 HTML 응답
+				if (url.searchParams.get('with') === 'play' && url.searchParams.get('type') === 'html') {
+					const html = `
+<!DOCTYPE html>
+<html>
+<head>
+<title>Play Content</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script defer src="https://gate1234.pages.dev/public/malgnPlayer.js"></script>
+<script>
+      let _player;
+      window.onload = function () {
+        malgnPlayer.setup({
+          targetID: "player",
+          video: {
+            primaryKey: "33333",
+            title: "test",
+            thumbnail: "",
+            // 단일 파일 설정 ( HLS & MPD 는 파일내 화질 정보를 사용합니다. )
+            source: "${target}"
+          }
+        });
+<style>
+  body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+  iframe { width: 100%; height: 100%; border: none; }
+</style>
+</head>
+<body>
+</body>
+</html>`;
+					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
+				}
+
 				// 추가: R1 타입의 만료 시간 확인
 				const expirationTimestamp = await env.REQ_TIME_KV.get(targetCode);
 				
