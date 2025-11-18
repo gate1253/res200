@@ -53,23 +53,23 @@ export async function handleRequest(request, env){
 <meta charset="UTF-8">
 <title>Play Content</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script defer src="https://gate1253.pages.dev/public/malgnPlayer.js?ttl=1"></script>
+<script>
+window.onload = function () {
+	malgnPlayer.setup({
+	targetID: "player",
+	video: {
+		thumbnail: "https://timgs.acs.wecandeo.com/thumb/513/20150724/17/2257_6c4bd_00000.jpg?udate=2025053002?udate=20220406",
+		primaryKey: "Gate1253", // 필요시 동적으로 변경 가능
+		title: "Gate1253", // 필요시 동적으로 변경 가능
+		source: "${target}"
+	}
+	});
+};
+</script>
 </head>
-<body>
-  <div id="player"></div>
-  <script defer src="https://gate1253.pages.dev/public/malgnPlayer.js?ttl=1"></script>
-  <script>
-    window.onload = function () {
-      malgnPlayer.setup({
-        targetID: "player",
-        video: {
-          thumbnail: "https://timgs.acs.wecandeo.com/thumb/513/20150724/17/2257_6c4bd_00000.jpg?udate=2025053002?udate=20220406",
-          primaryKey: "Gate1253", // 필요시 동적으로 변경 가능
-          title: "Gate1253", // 필요시 동적으로 변경 가능
-          source: "${target}"
-        }
-      });
-    };
-  </script>
+<body style="background-color: white">
+  <div id="player" style="width: 640px; height: 360px"></div>
 </body>
 </html>`;
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
