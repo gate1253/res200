@@ -45,7 +45,7 @@ export async function handleRequest(request, env){
 			if(target){
 
 				// 요청 URL의 쿼리스트링에 with=play, type=html 이 있는 경우 HTML 응답
-				if (url.searchParams.get('with') === 'play' && url.searchParams.get('type') === 'html') {
+				if (url.searchParams.get('with') === 'player' && url.searchParams.get('type') === 'html') {
 					const html = `
 <!DOCTYPE html>
 <html lang="ko">
