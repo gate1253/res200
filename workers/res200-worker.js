@@ -69,7 +69,7 @@ window.onload = function () {
 </script>
 </head>
 <body style="background-color: white">
-  <div id="player" style="width: 640px; height: 360px"></div>
+  <div id="player" style="width: 100%; height: 100%"></div>
 </body>
 </html>`;
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
