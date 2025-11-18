@@ -53,10 +53,6 @@ export async function handleRequest(request, env){
 <meta charset="UTF-8">
 <title>Play Content</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-  body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
-  #player { width: 100%; height: 100%; }
-</style>
 </head>
 <body>
   <div id="player"></div>
