@@ -60,14 +60,14 @@ export async function handleRequest(request, env){
 </head>
 <body>
   <div id="player"></div>
-  <script defer src="https://gate1253.pages.dev/public/malgnPlayer.js"></script>
+  <script defer src="https://gate1253.pages.dev/public/malgnPlayer.js?ttl=1"></script>
   <script>
     window.onload = function () {
       malgnPlayer.setup({
         targetID: "player",
         video: {
-          primaryKey: "33333", // 필요시 동적으로 변경 가능
-          title: "Video Content", // 필요시 동적으로 변경 가능
+          primaryKey: "Gate1253", // 필요시 동적으로 변경 가능
+          title: "Gate1253", // 필요시 동적으로 변경 가능
           source: "${target}"
         }
       });
