@@ -14,6 +14,19 @@ function jsonResponse(obj, status = 200, extraHeaders = {}) {
 	return new Response(JSON.stringify(obj), {status, headers});
 }
 
+//정의된 경로
+const definedPaths = [
+	'/malgnPlayer.js', 
+	'/js/notice2.c.js', '/js/notice0.c.js', 
+	'/js/dashall.c.js','/js/dashall.c.js.LICENSE.txt', 
+	'/js/dashmss.c.js', '/js/dashmss.c.js.LICENSE.txt',
+	'/js/hls.c.js', '/js/hls.c.js.LICENSE.txt',	
+	'/css/fonts/wecandeoIcon..eot', 
+	'/css/fonts/wecandeoIcon..svg',	
+	'/css/fonts/wecandeoIcon..ttf',	
+	'/css/fonts/wecandeoIcon..woff',	
+];
+
 export async function handleRequest(request, env){
 
 	// OPTIONS preflight 처리
@@ -24,9 +37,9 @@ export async function handleRequest(request, env){
 	const url = new URL(request.url);
 	const pathname = url.pathname;
 
-	// malgnPlayer.js GET 요청 처리
-	if (request.method === 'GET' && pathname === '/malgnPlayer.js') {
-		const destinationURL = 'https://gate1253.pages.dev/public/malgnPlayer.js';
+	// 정의된 경로로 들어온 요청 처리
+	if (request.method === 'GET' && definedPaths.includes(pathname)) {
+		const destinationURL = `https://gate1253.pages.dev/public${pathname}`;
 		return new Response(null, {
 			status: 302,
 			headers: Object.assign({ 'Location': destinationURL }, corsHeaders())
@@ -62,13 +75,12 @@ export async function handleRequest(request, env){
 <meta charset="UTF-8">
 <title>Play Content</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script defer src="https://r2.ggm.kr/malgnPlayer.js"></script>
+<script defer src="malgnPlayer.js"></script>
 <script>
 window.onload = function () {
 	malgnPlayer.setup({
 	targetID: "player",
 	video: {
-		thumbnail: "https://timgs.acs.wecandeo.com/thumb/513/20150724/17/2257_6c4bd_00000.jpg?udate=2025053002?udate=20220406",
 		primaryKey: "Gate1253", // 필요시 동적으로 변경 가능
 		title: "Gate1253", // 필요시 동적으로 변경 가능
 		source: "${target}"
