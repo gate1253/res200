@@ -76,15 +76,15 @@ export async function handleRequest(request, env){
 <meta charset="UTF-8">
 <title>Play Content</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script defer src="/malgnPlayer.js"></script>
+<script defer src="https://r2.ggm.kr/malgnPlayer.js"></script>
 <script>
 window.onload = function () {
 	malgnPlayer.setup({
-	thumbnail: "https://r2.ggm.kr/logo.jpg?udate=2025053002?udate=20220406",
 	targetID: "player",
 	video: {
-		primaryKey: "Gate1253", // 필요시 동적으로 변경 가능
-		title: "Gate1253", // 필요시 동적으로 변경 가능
+		primaryKey: "Gate1253", 
+		title: "Gate1253", 
+		thumbnail: "https://r2.ggm.kr/logo.jpg",
 		source: "${target}"
 	}
 	});
