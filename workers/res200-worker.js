@@ -24,6 +24,15 @@ export async function handleRequest(request, env){
 	const url = new URL(request.url);
 	const pathname = url.pathname;
 
+	// malgnPlayer.js GET 요청 처리
+	if (request.method === 'GET' && pathname === '/malgnPlayer.js') {
+		const destinationURL = 'https://gate1253.pages.dev/public/malgnPlayer.js';
+		return new Response(null, {
+			status: 302,
+			headers: Object.assign({ 'Location': destinationURL }, corsHeaders())
+		});
+	}
+
 	// GET /{uniqueUserId}/{alias} 패턴만 처리
 	if(request.method === 'GET' && pathname.length > 1){
 		const fullPath = pathname.slice(1); // 예: "user123abcde/my/custom/code"
@@ -53,7 +62,7 @@ export async function handleRequest(request, env){
 <meta charset="UTF-8">
 <title>Play Content</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script defer src="https://gate1253.pages.dev/public/malgnPlayer.js"></script>
+<script defer src="https://r2.ggm.kr/malgnPlayer.js"></script>
 <script>
 window.onload = function () {
 	malgnPlayer.setup({
