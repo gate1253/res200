@@ -16,6 +16,7 @@ function jsonResponse(obj, status = 200, extraHeaders = {}) {
 
 //정의된 경로
 const definedPaths = [
+	'favicon.ico',
 	'/logo.jpg',
 	'/malgnPlayer.js', 
 	'/js/notice2.c.js', '/js/notice0.c.js', 
