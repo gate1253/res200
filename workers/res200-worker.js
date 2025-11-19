@@ -81,6 +81,7 @@ window.onload = function () {
 	malgnPlayer.setup({
 	targetID: "player",
 	video: {
+	    thumbnail: "https://timgs.acs.wecandeo.com/thumb/513/20150724/17/2257_6c4bd_00000.jpg?udate=2025053002?udate=20220406",
 		primaryKey: "Gate1253", // 필요시 동적으로 변경 가능
 		title: "Gate1253", // 필요시 동적으로 변경 가능
 		source: "${target}"
