@@ -77,24 +77,20 @@ export async function handleRequest(request, env){
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script defer src="malgnPlayer.js"></script>
 <script>
-let _player;
 window.onload = function () {
 	malgnPlayer.setup({
 	targetID: "player",
 	video: {
-	    thumbnail: "https://timgs.acs.wecandeo.com/thumb/513/20150724/17/2257_6c4bd_00000.jpg?udate=2025053002?udate=20220406",
 		primaryKey: "Gate1253", // 필요시 동적으로 변경 가능
 		title: "Gate1253", // 필요시 동적으로 변경 가능
 		source: "${target}"
 	}
 	});
-	_player = malgnPlayer.getPlayer(0);
 };
 </script>
 </head>
 <body style="background-color: white">
-  <div id="player" style="width: 640px; height: 360px"></div>
-  <button id="load" style="position: absolute; top: 420px; width: auto; height: 25px" onclick="_player.play()">play</button>
+  <div id="player" style="width: 100%; height: 100%"></div>
 </body>
 </html>`;
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
