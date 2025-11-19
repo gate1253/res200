@@ -16,6 +16,7 @@ function jsonResponse(obj, status = 200, extraHeaders = {}) {
 
 //정의된 경로
 const definedPaths = [
+	'/logo.jpg',
 	'/malgnPlayer.js', 
 	'/js/notice2.c.js', '/js/notice0.c.js', 
 	'/js/dashall.c.js','/js/dashall.c.js.LICENSE.txt', 
@@ -75,10 +76,11 @@ export async function handleRequest(request, env){
 <meta charset="UTF-8">
 <title>Play Content</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script defer src="https://r2.ggm.kr/malgnPlayer.js"></script>
+<script defer src="/malgnPlayer.js"></script>
 <script>
 window.onload = function () {
 	malgnPlayer.setup({
+	thumbnail: "/logo.jpg",
 	targetID: "player",
 	video: {
 		primaryKey: "Gate1253", // 필요시 동적으로 변경 가능
