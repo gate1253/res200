@@ -76,7 +76,7 @@ export async function handleRequest(request, env){
 <meta charset="UTF-8">
 <title>Play Content</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script defer src="https://r2.ggm.kr/malgnPlayer.js"></script>
+<script defer src="/malgnPlayer.js"></script>
 <script>
 window.onload = function () {
 	malgnPlayer.setup({
@@ -84,7 +84,7 @@ window.onload = function () {
 	video: {
 		primaryKey: "Gate1253", 
 		title: "Gate1253", 
-		thumbnail: "https://r2.ggm.kr/logo.jpg",
+		thumbnail: "/logo.jpg",
 		source: "${target}"
 	}
 	});
