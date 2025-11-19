@@ -41,7 +41,7 @@ export async function handleRequest(request, env){
 
 	// 정의된 경로로 들어온 요청 처리
 	if (request.method === 'GET' && definedPaths.includes(pathname)) {
-		const destinationURL = `https://gate1253.pages.dev/player${pathname}`;
+		const destinationURL = `https://gate1253.pages.dev/public${pathname}`;
 		return new Response(null, {
 			status: 302,
 			headers: Object.assign({ 'Location': destinationURL }, corsHeaders())
