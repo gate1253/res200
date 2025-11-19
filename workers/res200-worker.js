@@ -80,7 +80,7 @@ export async function handleRequest(request, env){
 <script>
 window.onload = function () {
 	malgnPlayer.setup({
-	thumbnail: "/logo.jpg",
+	thumbnail: "https://r2.ggm.kr/logo.jpg",
 	targetID: "player",
 	video: {
 		primaryKey: "Gate1253", // 필요시 동적으로 변경 가능
