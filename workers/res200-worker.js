@@ -99,6 +99,64 @@ window.onload = function () {
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
 				}
 
+								if (url.searchParams.get('with') === 'webrtc' && url.searchParams.get('type') === 'html') {
+					const html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebRTC Example</title>
+</head>
+<body>
+    <h1>WebRTC Example</h1>
+    <p id="statusMessage" style="color: red;"></p>
+    <video id="localVideo" autoplay muted></video>
+    <video id="remoteVideo" autoplay></video>
+    <button onclick="startCall()">Start Call</button>
+    <script>
+        let localStream;
+        let peerConnection;
+
+        async function startCall() {
+            try {
+                document.getElementById('statusMessage').innerText = '';
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                document.getElementById('localVideo').srcObject = localStream;
+
+                peerConnection = new RTCPeerConnection();
+                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+                peerConnection.onicecandidate = event => {
+                    if (event.candidate) {
+                        // Send the candidate to the remote peer
+                        console.log('ICE candidate:', event.candidate);
+                    }
+                };
+
+                peerConnection.ontrack = event => {
+                    document.getElementById('remoteVideo').srcObject = event.streams[0];
+                };
+
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                // Send the offer to the remote peer
+                console.log('Offer:', offer);
+
+            } catch (error) {
+                console.error('Error starting call:', error);
+                const statusMessage = document.getElementById('statusMessage');
+                if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                    statusMessage.innerText = '카메라를 찾을 수 없습니다. 카메라 설정을 확인해주세요.';
+                } else {
+                    statusMessage.innerText = '오류가 발생했습니다: ' + error.message;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
+`;
+					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
+				}
 				// 추가: R1 타입의 만료 시간 확인
 				const expirationTimestamp = await env.REQ_TIME_KV.get(targetCode);
 				
