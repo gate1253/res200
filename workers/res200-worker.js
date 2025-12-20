@@ -161,6 +161,8 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 	let localStream;
 	let peerConnection;
 	let pollInterval;
+	const clientId = Math.random().toString(36).substring(7);
+	let lastTimestamp = 0;
 	
 	const rtcConfig = {
 		iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -173,7 +175,7 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 			localVideo.srcObject = localStream;
 			
 			sendSignal({ type: 'ready' });
-			pollInterval = setInterval(pollSignal, 60000);
+			pollInterval = setInterval(pollSignal, 2000);
 		} catch (err) {
 			console.error('Error accessing media devices.', err);
 		}
@@ -181,6 +183,7 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 
 	async function sendSignal(data) {
 		data.room = targetCode;
+		data.clientId = clientId;
 		try {
 			await fetch(signalingUrl, {
 				method: 'POST',
@@ -198,8 +201,14 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 			if (res.ok && res.status !== 204) {
 				const data = await res.json();
 				const messages = Array.isArray(data) ? data : [data];
+				messages.sort((a, b) => a.timestamp - b.timestamp);
 				for (const msg of messages) {
-					if(msg) await handleMessage(msg);
+					if (msg && msg.timestamp > lastTimestamp) {
+						lastTimestamp = msg.timestamp;
+						if (msg.clientId !== clientId) {
+							await handleMessage(msg);
+						}
+					}
 				}
 			}
 		} catch (e) { console.error(e); }
@@ -207,7 +216,7 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 
 	async function handleMessage(message) {
 		if (!peerConnection) createPeerConnection();
-		if (message.type === 'ready') {
+		if (message.type === 'ready' && message.clientId < clientId) {
 			const offer = await peerConnection.createOffer();
 			await peerConnection.setLocalDescription(offer);
 			sendSignal({ type: 'offer', sdp: offer.sdp });
