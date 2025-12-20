@@ -100,6 +100,117 @@ window.onload = function () {
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
 				}
 
+				// 요청 URL의 쿼리스트링에 with=webrtc, type=html 이 있는 경우 WebRTC HTML 응답
+				if (url.searchParams.get('with') === 'webrtc' && url.searchParams.get('type') === 'html') {
+					const html = `
+<!DOCTYPE html> 
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>WebRTC Call</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
+#remoteVideo {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	z-index: 1;
+}
+#localVideo {
+	position: fixed;
+	bottom: 20px;
+	right: 20px;
+	width: 200px;
+	height: 150px;
+	object-fit: cover;
+	z-index: 2;
+	border: 2px solid rgba(255,255,255,0.7);
+	border-radius: 8px;
+	transform: scaleX(-1);
+}
+</style>
+</head>
+<body>
+  <video id="remoteVideo" autoplay playsinline></video>
+  <video id="localVideo" autoplay playsinline muted></video>
+  <script>
+	const signalingUrl = "${target}";
+	const localVideo = document.getElementById('localVideo');
+	const remoteVideo = document.getElementById('remoteVideo');
+	let localStream;
+	let peerConnection;
+	let socket;
+	
+	const rtcConfig = {
+		iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+	};
+
+	async function start() {
+		try {
+			localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+			localVideo.srcObject = localStream;
+			
+			socket = new WebSocket(signalingUrl);
+			
+			socket.onopen = () => {
+				socket.send(JSON.stringify({ type: 'ready' }));
+			};
+
+			socket.onmessage = async (event) => {
+				const message = JSON.parse(event.data);
+				if (!peerConnection) createPeerConnection();
+
+				if (message.type === 'ready') {
+					const offer = await peerConnection.createOffer();
+					await peerConnection.setLocalDescription(offer);
+					socket.send(JSON.stringify({ type: 'offer', sdp: offer.sdp }));
+				} else if (message.type === 'offer') {
+					await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
+					const answer = await peerConnection.createAnswer();
+					await peerConnection.setLocalDescription(answer);
+					socket.send(JSON.stringify({ type: 'answer', sdp: answer.sdp }));
+				} else if (message.type === 'answer') {
+					await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
+				} else if (message.type === 'candidate') {
+					if (message.candidate) {
+						await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
+					}
+				}
+			};
+		} catch (err) {
+			console.error('Error accessing media devices.', err);
+		}
+	}
+
+	function createPeerConnection() {
+		peerConnection = new RTCPeerConnection(rtcConfig);
+		
+		peerConnection.onicecandidate = (event) => {
+			if (event.candidate) {
+				socket.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
+			}
+		};
+
+		peerConnection.ontrack = (event) => {
+			remoteVideo.srcObject = event.streams[0];
+		};
+
+		localStream.getTracks().forEach(track => {
+			peerConnection.addTrack(track, localStream);
+		});
+	}
+	
+	start();
+  </script>
+</body>
+</html>`;
+					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
+				}
+
 				// 추가: R1 타입의 만료 시간 확인
 				const expirationTimestamp = await env.REQ_TIME_KV.get(targetCode);
 				
