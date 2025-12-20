@@ -216,7 +216,7 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 
 	async function handleMessage(message) {
 		if (!peerConnection) createPeerConnection();
-		if (message.type === 'ready' && message.clientId !== clientId) {
+		if (message.type === 'ready' && message.clientId < clientId) {
 			const offer = await peerConnection.createOffer();
 			await peerConnection.setLocalDescription(offer);
 			sendSignal({ type: 'offer', sdp: offer.sdp });
