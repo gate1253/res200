@@ -139,11 +139,11 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
   <video id="localVideo" autoplay playsinline muted></video>
   <script>
 	const signalingUrl = "${target}";
+	const targetCode = "${targetCode}";
 	const localVideo = document.getElementById('localVideo');
 	const remoteVideo = document.getElementById('remoteVideo');
 	let localStream;
 	let peerConnection;
-	let socket;
 	
 	const rtcConfig = {
 		iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -154,35 +154,52 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 			localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 			localVideo.srcObject = localStream;
 			
-			socket = new WebSocket(signalingUrl);
-			
-			socket.onopen = () => {
-				socket.send(JSON.stringify({ type: 'ready' }));
-			};
-
-			socket.onmessage = async (event) => {
-				const message = JSON.parse(event.data);
-				if (!peerConnection) createPeerConnection();
-
-				if (message.type === 'ready') {
-					const offer = await peerConnection.createOffer();
-					await peerConnection.setLocalDescription(offer);
-					socket.send(JSON.stringify({ type: 'offer', sdp: offer.sdp }));
-				} else if (message.type === 'offer') {
-					await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
-					const answer = await peerConnection.createAnswer();
-					await peerConnection.setLocalDescription(answer);
-					socket.send(JSON.stringify({ type: 'answer', sdp: answer.sdp }));
-				} else if (message.type === 'answer') {
-					await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
-				} else if (message.type === 'candidate') {
-					if (message.candidate) {
-						await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
-					}
-				}
-			};
+			sendSignal({ type: 'ready' });
+			setInterval(pollSignal, 1000);
 		} catch (err) {
 			console.error('Error accessing media devices.', err);
+		}
+	}
+
+	async function sendSignal(data) {
+		data.room = targetCode;
+		try {
+			await fetch(signalingUrl, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(data)
+			});
+		} catch (e) { console.error(e); }
+	}
+
+	async function pollSignal() {
+		try {
+			const res = await fetch(signalingUrl);
+			if (res.ok && res.status !== 204) {
+				const data = await res.json();
+				const messages = Array.isArray(data) ? data : [data];
+				for (const msg of messages) {
+					if(msg) await handleMessage(msg);
+				}
+			}
+		} catch (e) { console.error(e); }
+	}
+
+	async function handleMessage(message) {
+		if (!peerConnection) createPeerConnection();
+		if (message.type === 'ready') {
+			const offer = await peerConnection.createOffer();
+			await peerConnection.setLocalDescription(offer);
+			sendSignal({ type: 'offer', sdp: offer.sdp });
+		} else if (message.type === 'offer') {
+			await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
+			const answer = await peerConnection.createAnswer();
+			await peerConnection.setLocalDescription(answer);
+			sendSignal({ type: 'answer', sdp: answer.sdp });
+		} else if (message.type === 'answer') {
+			await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
+		} else if (message.type === 'candidate' && message.candidate) {
+			await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
 		}
 	}
 
@@ -191,7 +208,7 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 		
 		peerConnection.onicecandidate = (event) => {
 			if (event.candidate) {
-				socket.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
+				sendSignal({ type: 'candidate', candidate: event.candidate });
 			}
 		};
 
