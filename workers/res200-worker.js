@@ -162,7 +162,7 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 	let peerConnection;
 	let pollInterval;
 	let candidateQueue = [];
-	const clientId = Math.random().toString(36).substring(7);
+	const clientId = Date.now();
 	let lastTimestamp = 0;
 	
 	const rtcConfig = {
@@ -218,10 +218,12 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 	async function handleMessage(message) {
 		if (!peerConnection) createPeerConnection();
 		if (message.type === 'ready' && message.clientId < clientId) {
+			console.log('Creating Offer');
 			const offer = await peerConnection.createOffer();
 			await peerConnection.setLocalDescription(offer);
 			sendSignal({ type: 'offer', sdp: offer.sdp });
 		} else if (message.type === 'offer') {
+			console.log('Received Offer, Creating Answer');
 			await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
 			while (candidateQueue.length > 0) {
 				try { await peerConnection.addIceCandidate(candidateQueue.shift()); } catch (e) { console.error(e); }
@@ -247,15 +249,22 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 
 	function createPeerConnection() {
 		peerConnection = new RTCPeerConnection(rtcConfig);
+		candidateQueue = []; // 연결 생성 시 큐 초기화
 		
 		peerConnection.onconnectionstatechange = () => {
+			console.log('Connection State:', peerConnection.connectionState);
 			if (peerConnection.connectionState === 'connected') {
 				clearInterval(pollInterval);
 			}
 		};
 
+		peerConnection.onicegatheringstatechange = () => {
+			console.log('ICE Gathering State:', peerConnection.iceGatheringState);
+		};
+
 		peerConnection.onicecandidate = (event) => {
 			if (event.candidate) {
+				console.log('ICE Candidate:', event.candidate);
 				sendSignal({ type: 'candidate', candidate: event.candidate });
 			}
 		};
