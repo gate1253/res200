@@ -132,30 +132,48 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 	border-radius: 8px;
 	transform: scaleX(-1);
 }
+#startButton {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	z-index: 3;
+	padding: 15px 30px;
+	font-size: 20px;
+	background-color: #28a745;
+	color: white;
+	border: none;
+	border-radius: 8px;
+	cursor: pointer;
+}
 </style>
 </head>
 <body>
   <video id="remoteVideo" autoplay playsinline></video>
   <video id="localVideo" autoplay playsinline muted></video>
+  <button id="startButton">Call</button>
   <script>
 	const signalingUrl = "${target}";
 	const targetCode = "${targetCode}";
 	const localVideo = document.getElementById('localVideo');
 	const remoteVideo = document.getElementById('remoteVideo');
+	const startButton = document.getElementById('startButton');
 	let localStream;
 	let peerConnection;
+	let pollInterval;
 	
 	const rtcConfig = {
 		iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
 	};
 
 	async function start() {
+		startButton.style.display = 'none';
 		try {
 			localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 			localVideo.srcObject = localStream;
 			
 			sendSignal({ type: 'ready' });
-			setInterval(pollSignal, 60000 * 5);
+			pollInterval = setInterval(pollSignal, 60000);
 		} catch (err) {
 			console.error('Error accessing media devices.', err);
 		}
@@ -208,6 +226,12 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 	function createPeerConnection() {
 		peerConnection = new RTCPeerConnection(rtcConfig);
 		
+		peerConnection.onconnectionstatechange = () => {
+			if (peerConnection.connectionState === 'connected') {
+				clearInterval(pollInterval);
+			}
+		};
+
 		peerConnection.onicecandidate = (event) => {
 			if (event.candidate) {
 				sendSignal({ type: 'candidate', candidate: event.candidate });
@@ -223,7 +247,7 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 		});
 	}
 	
-	start();
+	startButton.addEventListener('click', start);
   </script>
 </body>
 </html>`;
