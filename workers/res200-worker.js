@@ -169,10 +169,10 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 	};
 
 	async function start() {
-		startButton.style.display = 'none';
 		try {
 			localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 			localVideo.srcObject = localStream;
+			startButton.style.display = 'none';
 			
 			sendSignal({ type: 'ready' });
 			pollInterval = setInterval(pollSignal, 2000);
@@ -228,7 +228,9 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 		} else if (message.type === 'answer') {
 			await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
 		} else if (message.type === 'candidate' && message.candidate) {
-			await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
+			try {
+				await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
+			} catch (e) { console.error(e); }
 		}
 	}
 
