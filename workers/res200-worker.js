@@ -220,7 +220,9 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 		if (message.type === 'ready' && message.clientId < clientId) {
 			console.log('Creating Offer');
 			const offer = await peerConnection.createOffer();
+			console.log('Creating Offer setLocalDescription');
 			await peerConnection.setLocalDescription(offer);
+			console.log('Creating Offer setLocalDescription Complete');
 			sendSignal({ type: 'offer', sdp: offer.sdp });
 		} else if (message.type === 'offer') {
 			console.log('Received Offer, Creating Answer');
