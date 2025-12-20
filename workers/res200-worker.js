@@ -146,18 +146,30 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 	border-radius: 8px;
 	cursor: pointer;
 }
+#statusMessage {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	z-index: 4;
+	color: white;
+	font-size: 24px;
+	display: none;
+}
 </style>
 </head>
 <body>
   <video id="remoteVideo" autoplay playsinline></video>
   <video id="localVideo" autoplay playsinline muted></video>
   <button id="startButton">Call</button>
+  <div id="statusMessage">연결 진행 중...</div>
   <script>
 	const signalingUrl = "${target}";
 	const targetCode = "${targetCode}";
 	const localVideo = document.getElementById('localVideo');
 	const remoteVideo = document.getElementById('remoteVideo');
 	const startButton = document.getElementById('startButton');
+	const statusMessage = document.getElementById('statusMessage');
 	let localStream;
 	let peerConnection;
 	let pollInterval;
@@ -174,6 +186,7 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 			localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 			localVideo.srcObject = localStream;
 			startButton.style.display = 'none';
+			statusMessage.style.display = 'block';
 			
 			sendSignal({ type: 'ready' });
 			pollInterval = setInterval(pollSignal, 2000);
@@ -186,11 +199,17 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 		data.room = targetCode;
 		data.clientId = clientId;
 		try {
-			await fetch(signalingUrl, {
+			const response = await fetch(signalingUrl, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(data)
 			});
+			if (response.status === 403) {
+				const resData = await response.json();
+				if (resData.error === 'Room is full') {
+					alert('접속 인원이 초과되었습니다.');
+				}
+			}
 		} catch (e) { console.error(e); }
 	}
 
@@ -256,6 +275,7 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 		peerConnection.onconnectionstatechange = () => {
 			console.log('Connection State:', peerConnection.connectionState);
 			if (peerConnection.connectionState === 'connected') {
+				statusMessage.style.display = 'none';
 				clearInterval(pollInterval);
 			}
 		};
