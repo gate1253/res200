@@ -174,7 +174,9 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 
 	async function pollSignal() {
 		try {
-			const res = await fetch(signalingUrl);
+			const url = new URL(signalingUrl);
+			url.searchParams.append('room', targetCode);
+			const res = await fetch(url);
 			if (res.ok && res.status !== 204) {
 				const data = await res.json();
 				const messages = Array.isArray(data) ? data : [data];
