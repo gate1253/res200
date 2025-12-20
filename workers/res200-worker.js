@@ -155,7 +155,7 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 			localVideo.srcObject = localStream;
 			
 			sendSignal({ type: 'ready' });
-			setInterval(pollSignal, 1000);
+			setInterval(pollSignal, 60000 * 5);
 		} catch (err) {
 			console.error('Error accessing media devices.', err);
 		}
