@@ -161,6 +161,7 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 	let localStream;
 	let peerConnection;
 	let pollInterval;
+	let candidateQueue = [];
 	const clientId = Math.random().toString(36).substring(7);
 	let lastTimestamp = 0;
 	
@@ -222,14 +223,24 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 			sendSignal({ type: 'offer', sdp: offer.sdp });
 		} else if (message.type === 'offer') {
 			await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
+			while (candidateQueue.length > 0) {
+				try { await peerConnection.addIceCandidate(candidateQueue.shift()); } catch (e) { console.error(e); }
+			}
 			const answer = await peerConnection.createAnswer();
 			await peerConnection.setLocalDescription(answer);
 			sendSignal({ type: 'answer', sdp: answer.sdp });
 		} else if (message.type === 'answer') {
 			await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
+			while (candidateQueue.length > 0) {
+				try { await peerConnection.addIceCandidate(candidateQueue.shift()); } catch (e) { console.error(e); }
+			}
 		} else if (message.type === 'candidate' && message.candidate) {
 			try {
-				await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
+				if (peerConnection.remoteDescription) {
+					await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
+				} else {
+					candidateQueue.push(new RTCIceCandidate(message.candidate));
+				}
 			} catch (e) { console.error(e); }
 		}
 	}
