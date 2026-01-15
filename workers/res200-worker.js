@@ -80,7 +80,9 @@ export async function handleRequest(request, env) {
 
 				// 요청 URL의 쿼리스트링에 with=webrtc, type=html 이 있는 경우 WebRTC HTML 응답
 				if (url.searchParams.get('with') === 'webrtc' && url.searchParams.get('type') === 'html') {
-					const html = getWebRtcHtml(target, targetCode);
+					// Cloudflare TURN/STUN 설정을 환경 변수나 바인딩에서 가져올 수 있도록 구성 가능
+					const iceServers = env.ICE_SERVERS ? JSON.parse(env.ICE_SERVERS) : [];
+					const html = getWebRtcHtml(target, targetCode, iceServers);
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
 				}
 

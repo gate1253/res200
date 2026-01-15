@@ -1,4 +1,10 @@
-export function getWebRtcHtml(target, targetCode) {
+export function getWebRtcHtml(target, targetCode, iceServers = []) {
+	// iceServers가 제공되지 않았을 때의 기본값 (STUN)
+	const defaultIceServers = JSON.stringify(iceServers.length > 0 ? iceServers : [
+		{ urls: 'stun:stun.l.google.com:19302' },
+		{ urls: 'stun:stun1.l.google.com:19302' }
+	]);
+
 	return `
 <!DOCTYPE html> 
 <html lang="ko">
@@ -34,6 +40,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
 }
 video {
     width: 100%;
@@ -44,10 +51,20 @@ video {
     position: absolute;
     bottom: 10px;
     left: 10px;
-    background: rgba(0,0,0,0.5);
-    padding: 2px 8px;
+    background: rgba(0,0,0,0.6);
+    padding: 4px 10px;
     border-radius: 4px;
     font-size: 12px;
+    backdrop-filter: blur(4px);
+}
+.status-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: rgba(40, 167, 69, 0.7);
 }
 #localVideoContainer {
     border: 2px solid #28a745;
@@ -68,21 +85,29 @@ video {
 	border: none;
 	border-radius: 8px;
 	cursor: pointer;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    transition: transform 0.2s;
+}
+#startButton:hover {
+    transform: translate(-50%, -53%) scale(1.05);
 }
 #status {
     position: fixed;
     top: 10px;
-    right: 10px;
-    font-size: 14px;
-    color: #888;
+    right: 15px;
+    font-size: 13px;
+    color: #aaa;
     z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
+.dot { height: 8px; width: 8px; background-color: #28a745; border-radius: 50%; display: inline-block; }
 </style>
 </head>
 <body>
   <button id="startButton">Join Call</button>
-  <div id="status">Connecting...</div>
+  <div id="status"><span class="dot" style="background-color: #ffc107"></span>Initializing...</div>
   <div id="videoGrid">
     <div id="localVideoContainer" class="video-container">
         <video id="localVideo" autoplay playsinline muted></video>
@@ -101,11 +126,11 @@ video {
 	let localStream;
 	const peerConnections = {}; // clientId: RTCPeerConnection
 	const clientId = Date.now() + Math.floor(Math.random() * 1000);
-	const lastProcessedTimestamps = new Set();
+	const processedMessageIds = new Set();
 	let lastTimestamp = 0;
 	
 	const rtcConfig = {
-		iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+		iceServers: ${defaultIceServers}
 	};
 
 	async function start() {
@@ -113,34 +138,35 @@ video {
 			localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 			localVideo.srcObject = localStream;
 			startButton.style.display = 'none';
-			statusMsg.textContent = 'Active (Room: ' + targetCode + ')';
+			statusMsg.innerHTML = '<span class="dot"></span> Connected to ' + targetCode;
 			
 			await sendSignal({ type: 'join' });
-			schedulePoll(500); // Start fast polling
+			schedulePoll(500); 
 		} catch (err) {
 			console.error('Media error:', err);
-            alert('Could not access camera/microphone.');
+            alert('카메라 또는 마이크에 접근할 수 없습니다.');
 		}
 	}
 
 	async function sendSignal(data) {
 		data.room = targetCode;
 		data.clientId = clientId;
+        data.msgId = Math.random().toString(36).substring(2, 15);
 		try {
 			await fetch(signalingUrl, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(data)
 			});
-            // Send mapping signal then poll immediately for response
-            pollSignal(); 
+            // 신호를 보낸 후 즉시 폴링하여 응답 확인
+            setTimeout(pollSignal, 100); 
 		} catch (e) { console.error('Signal send error:', e); }
 	}
 
     function schedulePoll(ms) {
         setTimeout(async () => {
             await pollSignal();
-            // Continue polling: 500ms if signaling, 3000ms if idle
+            // 연결된 피어가 없으면 1초, 있으면 3초 간격 (배터리/네트웍 절약)
             const interval = Object.keys(peerConnections).length === 0 ? 1000 : 3000;
             schedulePoll(interval);
         }, ms);
@@ -156,11 +182,23 @@ video {
 				const messages = Array.isArray(data) ? data : [data];
 				messages.sort((a, b) => a.timestamp - b.timestamp);
 				for (const msg of messages) {
-					if (msg && msg.timestamp > lastTimestamp && msg.clientId !== clientId) {
+                    if (!msg || msg.clientId === clientId) continue;
+                    
+                    // 메시지 중복 처리 방지 (timestamp + msgId 조합)
+                    const uniqueId = msg.timestamp + '-' + (msg.msgId || '0');
+                    if (processedMessageIds.has(uniqueId)) continue;
+                    processedMessageIds.add(uniqueId);
+                    
+					if (msg.timestamp > lastTimestamp) {
 						lastTimestamp = msg.timestamp;
 						await handleMessage(msg);
 					}
 				}
+                // 오래된 메시지 ID 캐시 정리
+                if (processedMessageIds.size > 100) {
+                    const idsArr = Array.from(processedMessageIds);
+                    idsArr.slice(0, 50).forEach(id => processedMessageIds.delete(id));
+                }
 			}
 		} catch (e) { console.error('Poll error:', e); }
 	}
@@ -169,9 +207,9 @@ video {
         const peerId = msg.clientId;
         
 		if (msg.type === 'join') {
-            // New peer joined, if I have lower clientId, I initiate the offer
+            // 내가 먼저 들어와 있었다면 (내 ID가 더 작으면) 연결 시도
 			if (clientId < peerId) {
-                console.log('Initiating offer to', peerId);
+                console.log('Initiating peer connection to', peerId);
 			    await createPeerConnection(peerId, true);
             }
 		} else if (msg.type === 'offer' && msg.targetId === clientId) {
@@ -184,11 +222,15 @@ video {
 		} else if (msg.type === 'answer' && msg.targetId === clientId) {
 			console.log('Received answer from', peerId);
 			const pc = peerConnections[peerId];
-			if (pc) await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+			if (pc && pc.signalingState === 'have-local-offer') {
+                await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+            }
 		} else if (msg.type === 'candidate' && msg.targetId === clientId) {
 			const pc = peerConnections[peerId];
 			if (pc && msg.candidate) {
-				try { await pc.addIceCandidate(new RTCIceCandidate(msg.candidate)); } catch (e) { console.error(e); }
+				try { 
+                    await pc.addIceCandidate(new RTCIceCandidate(msg.candidate)); 
+                } catch (e) { console.error('ICE adding error:', e); }
 			}
 		}
 	}
@@ -206,31 +248,19 @@ video {
 		};
 
 		pc.ontrack = (event) => {
-            console.log('Received track from', peerId);
-            if (!document.getElementById('video-' + peerId)) {
-                const container = document.createElement('div');
-                container.id = 'container-' + peerId;
-                container.className = 'video-container';
-                
-                const video = document.createElement('video');
-                video.id = 'video-' + peerId;
-                video.autoplay = true;
-                video.playsinline = true;
-                video.srcObject = event.streams[0];
-                
-                const label = document.createElement('div');
-                label.className = 'label';
-                label.textContent = 'Peer ' + peerId;
-                
-                container.appendChild(video);
-                container.appendChild(label);
-                videoGrid.appendChild(container);
-            }
+            console.log('Received remote track from', peerId);
+            updatePeerVideo(peerId, event.streams[0]);
 		};
         
         pc.onconnectionstatechange = () => {
+            console.log('Peer', peerId, 'state:', pc.connectionState);
+            const badge = document.getElementById('badge-' + peerId);
+            if (badge) badge.textContent = pc.connectionState;
+            
             if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-                removePeer(peerId);
+                setTimeout(() => {
+                    if (pc.connectionState !== 'connected') removePeer(peerId);
+                }, 5000); // 5초 대기 후 여전히 끊겨있으면 제거
             }
         };
 
@@ -246,6 +276,35 @@ video {
 
         return pc;
 	}
+    
+    function updatePeerVideo(peerId, stream) {
+        let video = document.getElementById('video-' + peerId);
+        if (!video) {
+            const container = document.createElement('div');
+            container.id = 'container-' + peerId;
+            container.className = 'video-container';
+            
+            video = document.createElement('video');
+            video.id = 'video-' + peerId;
+            video.autoplay = true;
+            video.playsinline = true;
+            
+            const label = document.createElement('div');
+            label.className = 'label';
+            label.textContent = 'Peer ' + peerId;
+
+            const badge = document.createElement('div');
+            badge.id = 'badge-' + peerId;
+            badge.className = 'status-badge';
+            badge.textContent = 'connecting';
+            
+            container.appendChild(video);
+            container.appendChild(label);
+            container.appendChild(badge);
+            videoGrid.appendChild(container);
+        }
+        video.srcObject = stream;
+    }
     
     function removePeer(peerId) {
         if (peerConnections[peerId]) {
