@@ -1,40 +1,66 @@
 export function getWebRtcHtml(target, targetCode) {
-    return `
+	return `
 <!DOCTYPE html> 
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>WebRTC Call</title>
+<title>WebRTC Multi-User Call</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
-#remoteVideo {
-	position: fixed;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 100%;
-	object-fit: cover;
-	z-index: 1;
+body { 
+    margin: 0; padding: 0; background-color: #1a1a1a; color: white; 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden; 
+}
+#videoGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-auto-rows: 1fr;
+    gap: 10px;
+    padding: 10px;
+    width: 100vw;
+    height: 100vh;
+    box-sizing: border-box;
+    align-items: center;
+    justify-items: center;
+}
+.video-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.label {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.5);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+#localVideoContainer {
+    border: 2px solid #28a745;
 }
 #localVideo {
-	position: fixed;
-	bottom: 20px;
-	right: 20px;
-	width: 200px;
-	height: 150px;
-	object-fit: cover;
-	z-index: 2;
-	border: 2px solid rgba(255,255,255,0.7);
-	border-radius: 8px;
-	transform: scaleX(-1);
+    transform: scaleX(-1);
 }
 #startButton {
 	position: fixed;
 	top: 50%;
 	left: 50%;
 	transform: translate(-50%, -50%);
-	z-index: 3;
+	z-index: 100;
 	padding: 15px 30px;
 	font-size: 20px;
 	background-color: #28a745;
@@ -42,36 +68,40 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 	border: none;
 	border-radius: 8px;
 	cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
 }
-#statusMessage {
-	position: fixed;
-	top: 50%;
-	left: 50%;
-	transform: translate(-50%, -50%);
-	z-index: 4;
-	color: white;
-	font-size: 24px;
-	display: none;
+#status {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    font-size: 14px;
+    color: #888;
+    z-index: 10;
 }
 </style>
 </head>
 <body>
-  <video id="remoteVideo" autoplay playsinline></video>
-  <video id="localVideo" autoplay playsinline muted></video>
-  <button id="startButton">Call</button>
-  <div id="statusMessage">연결 진행 중...</div>
+  <button id="startButton">Join Call</button>
+  <div id="status">Connecting...</div>
+  <div id="videoGrid">
+    <div id="localVideoContainer" class="video-container">
+        <video id="localVideo" autoplay playsinline muted></video>
+        <div class="label">You</div>
+    </div>
+  </div>
+
   <script>
 	const signalingUrl = "${target}";
 	const targetCode = "${targetCode}";
+	const videoGrid = document.getElementById('videoGrid');
 	const localVideo = document.getElementById('localVideo');
-	const remoteVideo = document.getElementById('remoteVideo');
 	const startButton = document.getElementById('startButton');
-	const statusMessage = document.getElementById('statusMessage');
+	const statusMsg = document.getElementById('status');
+    
 	let localStream;
-	let peerConnection;
-	let pollInterval;
-	let candidateQueue = [];
-	const clientId = Date.now();
+	const peerConnections = {}; // clientId: RTCPeerConnection
+	const clientId = Date.now() + Math.floor(Math.random() * 1000);
+	const lastProcessedTimestamps = new Set();
 	let lastTimestamp = 0;
 	
 	const rtcConfig = {
@@ -83,12 +113,13 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 			localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 			localVideo.srcObject = localStream;
 			startButton.style.display = 'none';
-			statusMessage.style.display = 'block';
+			statusMsg.textContent = 'Active (Room: ' + targetCode + ')';
 			
-			sendSignal({ type: 'ready' });
-			pollInterval = setInterval(pollSignal, 2000);
+			sendSignal({ type: 'join' });
+			setInterval(pollSignal, 2000);
 		} catch (err) {
-			console.error('Error accessing media devices.', err);
+			console.error('Media error:', err);
+            alert('Could not access camera/microphone.');
 		}
 	}
 
@@ -96,18 +127,12 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 		data.room = targetCode;
 		data.clientId = clientId;
 		try {
-			const response = await fetch(signalingUrl, {
+			await fetch(signalingUrl, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(data)
 			});
-			if (response.status === 403) {
-				const resData = await response.json();
-				if (resData.error === 'Room is full') {
-					alert('접속 인원이 초과되었습니다.');
-				}
-			}
-		} catch (e) { console.error(e); }
+		} catch (e) { console.error('Signal send error:', e); }
 	}
 
 	async function pollSignal() {
@@ -120,85 +145,109 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 				const messages = Array.isArray(data) ? data : [data];
 				messages.sort((a, b) => a.timestamp - b.timestamp);
 				for (const msg of messages) {
-					if (msg && msg.timestamp > lastTimestamp) {
+					if (msg && msg.timestamp > lastTimestamp && msg.clientId !== clientId) {
 						lastTimestamp = msg.timestamp;
-						if (msg.clientId !== clientId) {
-							await handleMessage(msg);
-						}
+						await handleMessage(msg);
 					}
 				}
 			}
-		} catch (e) { console.error(e); }
+		} catch (e) { console.error('Poll error:', e); }
 	}
 
-	async function handleMessage(message) {
-		if (!peerConnection) createPeerConnection();
-		if (message.type === 'ready' && message.clientId < clientId) {
-			console.log('Creating Offer');
-			const offer = await peerConnection.createOffer();
-			console.log('Creating Offer setLocalDescription');
-			await peerConnection.setLocalDescription(offer);
-			console.log('Creating Offer setLocalDescription Complete');
-			sendSignal({ type: 'offer', sdp: offer.sdp });
-		} else if (message.type === 'offer') {
-			console.log('Received Offer, Creating Answer');
-			await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
-			while (candidateQueue.length > 0) {
-				try { await peerConnection.addIceCandidate(candidateQueue.shift()); } catch (e) { console.error(e); }
+	async function handleMessage(msg) {
+        const peerId = msg.clientId;
+        
+		if (msg.type === 'join') {
+            // New peer joined, if I have lower clientId, I initiate the offer
+			if (clientId < peerId) {
+                console.log('Initiating offer to', peerId);
+			    await createPeerConnection(peerId, true);
+            }
+		} else if (msg.type === 'offer' && msg.targetId === clientId) {
+			console.log('Received offer from', peerId);
+			const pc = await createPeerConnection(peerId, false);
+			await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+			const answer = await pc.createAnswer();
+			await pc.setLocalDescription(answer);
+			sendSignal({ type: 'answer', targetId: peerId, sdp: answer });
+		} else if (msg.type === 'answer' && msg.targetId === clientId) {
+			console.log('Received answer from', peerId);
+			const pc = peerConnections[peerId];
+			if (pc) await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+		} else if (msg.type === 'candidate' && msg.targetId === clientId) {
+			const pc = peerConnections[peerId];
+			if (pc && msg.candidate) {
+				try { await pc.addIceCandidate(new RTCIceCandidate(msg.candidate)); } catch (e) { console.error(e); }
 			}
-			const answer = await peerConnection.createAnswer();
-			await peerConnection.setLocalDescription(answer);
-			sendSignal({ type: 'answer', sdp: answer.sdp });
-		} else if (message.type === 'answer') {
-			await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
-			while (candidateQueue.length > 0) {
-				try { await peerConnection.addIceCandidate(candidateQueue.shift()); } catch (e) { console.error(e); }
-			}
-		} else if (message.type === 'candidate' && message.candidate) {
-			try {
-				if (peerConnection.remoteDescription) {
-					await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
-				} else {
-					candidateQueue.push(new RTCIceCandidate(message.candidate));
-				}
-			} catch (e) { console.error(e); }
 		}
 	}
 
-	function createPeerConnection() {
-		peerConnection = new RTCPeerConnection(rtcConfig);
-		candidateQueue = []; // 연결 생성 시 큐 초기화
-		
-		peerConnection.onconnectionstatechange = () => {
-			console.log('Connection State:', peerConnection.connectionState);
-			if (peerConnection.connectionState === 'connected') {
-				statusMessage.style.display = 'none';
-				clearInterval(pollInterval);
-			}
-		};
+	async function createPeerConnection(peerId, isInitiator) {
+        if (peerConnections[peerId]) return peerConnections[peerId];
 
-		peerConnection.onicegatheringstatechange = () => {
-			console.log('ICE Gathering State:', peerConnection.iceGatheringState);
-		};
+		const pc = new RTCPeerConnection(rtcConfig);
+		peerConnections[peerId] = pc;
 
-		peerConnection.onicecandidate = (event) => {
+		pc.onicecandidate = (event) => {
 			if (event.candidate) {
-				console.log('ICE Candidate:', event.candidate);
-				sendSignal({ type: 'candidate', candidate: event.candidate });
+				sendSignal({ type: 'candidate', targetId: peerId, candidate: event.candidate });
 			}
 		};
 
-		peerConnection.ontrack = (event) => {
-			remoteVideo.srcObject = event.streams[0];
+		pc.ontrack = (event) => {
+            console.log('Received track from', peerId);
+            if (!document.getElementById('video-' + peerId)) {
+                const container = document.createElement('div');
+                container.id = 'container-' + peerId;
+                container.className = 'video-container';
+                
+                const video = document.createElement('video');
+                video.id = 'video-' + peerId;
+                video.autoplay = true;
+                video.playsinline = true;
+                video.srcObject = event.streams[0];
+                
+                const label = document.createElement('div');
+                label.className = 'label';
+                label.textContent = 'Peer ' + peerId;
+                
+                container.appendChild(video);
+                container.appendChild(label);
+                videoGrid.appendChild(container);
+            }
 		};
+        
+        pc.onconnectionstatechange = () => {
+            if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+                removePeer(peerId);
+            }
+        };
 
 		localStream.getTracks().forEach(track => {
-			peerConnection.addTrack(track, localStream);
+			pc.addTrack(track, localStream);
 		});
+
+        if (isInitiator) {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            sendSignal({ type: 'offer', targetId: peerId, sdp: offer });
+        }
+
+        return pc;
 	}
+    
+    function removePeer(peerId) {
+        if (peerConnections[peerId]) {
+            peerConnections[peerId].close();
+            delete peerConnections[peerId];
+        }
+        const container = document.getElementById('container-' + peerId);
+        if (container) container.remove();
+    }
 	
 	startButton.addEventListener('click', start);
   </script>
 </body>
 </html>`;
 }
+
