@@ -115,8 +115,8 @@ video {
 			startButton.style.display = 'none';
 			statusMsg.textContent = 'Active (Room: ' + targetCode + ')';
 			
-			sendSignal({ type: 'join' });
-			setInterval(pollSignal, 2000);
+			await sendSignal({ type: 'join' });
+			schedulePoll(500); // Start fast polling
 		} catch (err) {
 			console.error('Media error:', err);
             alert('Could not access camera/microphone.');
@@ -132,8 +132,19 @@ video {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(data)
 			});
+            // Send mapping signal then poll immediately for response
+            pollSignal(); 
 		} catch (e) { console.error('Signal send error:', e); }
 	}
+
+    function schedulePoll(ms) {
+        setTimeout(async () => {
+            await pollSignal();
+            // Continue polling: 500ms if signaling, 3000ms if idle
+            const interval = Object.keys(peerConnections).length === 0 ? 1000 : 3000;
+            schedulePoll(interval);
+        }, ms);
+    }
 
 	async function pollSignal() {
 		try {
