@@ -1,4 +1,7 @@
 
+import { getPlayerHtml } from './templates/playerTemplate.js';
+import { getWebRtcHtml } from './templates/webrtcTemplate.js';
+
 // CORS 유틸리티 함수
 function corsHeaders() {
 	return {
@@ -8,33 +11,33 @@ function corsHeaders() {
 		'Access-Control-Max-Age': '86400'
 	};
 }
- 
+
 // JSON 응답 유틸리티 함수
 function jsonResponse(obj, status = 200, extraHeaders = {}) {
-	const headers = Object.assign({}, corsHeaders(), {'Content-Type':'application/json'}, extraHeaders);
-	return new Response(JSON.stringify(obj), {status, headers});
+	const headers = Object.assign({}, corsHeaders(), { 'Content-Type': 'application/json' }, extraHeaders);
+	return new Response(JSON.stringify(obj), { status, headers });
 }
 
 //정의된 경로
 const definedPaths = [
 	'/favicon.ico',
 	'/logo.jpg',
-	'/malgnPlayer.js', 
-	'/js/notice2.c.js', '/js/notice0.c.js', 
-	'/js/dashall.c.js','/js/dashall.c.js.LICENSE.txt', 
+	'/malgnPlayer.js',
+	'/js/notice2.c.js', '/js/notice0.c.js',
+	'/js/dashall.c.js', '/js/dashall.c.js.LICENSE.txt',
 	'/js/dashmss.c.js', '/js/dashmss.c.js.LICENSE.txt',
-	'/js/hls.c.js', '/js/hls.c.js.LICENSE.txt',	
-	'/css/fonts/wecandeoIcon..eot', 
-	'/css/fonts/wecandeoIcon..svg',	
-	'/css/fonts/wecandeoIcon..ttf',	
-	'/css/fonts/wecandeoIcon..woff',	
+	'/js/hls.c.js', '/js/hls.c.js.LICENSE.txt',
+	'/css/fonts/wecandeoIcon..eot',
+	'/css/fonts/wecandeoIcon..svg',
+	'/css/fonts/wecandeoIcon..ttf',
+	'/css/fonts/wecandeoIcon..woff',
 ];
 
-export async function handleRequest(request, env){
+export async function handleRequest(request, env) {
 
 	// OPTIONS preflight 처리
-	if(request.method === 'OPTIONS'){
-		return new Response(null, {status:204, headers: corsHeaders()});
+	if (request.method === 'OPTIONS') {
+		return new Response(null, { status: 204, headers: corsHeaders() });
 	}
 
 	const url = new URL(request.url);
@@ -50,7 +53,7 @@ export async function handleRequest(request, env){
 	}
 
 	// GET /{uniqueUserId}/{alias} 패턴만 처리
-	if(request.method === 'GET' && pathname.length > 1){
+	if (request.method === 'GET' && pathname.length > 1) {
 		const fullPath = pathname.slice(1); // 예: "user123abcde/my/custom/code"
 		const pathSegments = fullPath.split('/');
 		let targetCode = null; // KV에서 조회할 최종 키
@@ -67,249 +70,23 @@ export async function handleRequest(request, env){
 
 		if (targetCode) {
 			const target = await env.RES302_KV.get(targetCode);
-			if(target){
+			if (target) {
 
 				// 요청 URL의 쿼리스트링에 with=play, type=html 이 있는 경우 HTML 응답
 				if (url.searchParams.get('with') === 'player' && url.searchParams.get('type') === 'html') {
-					const html = `
-<!DOCTYPE html> 
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<title>Play Content</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script defer src="/malgnPlayer.js"></script>
-<script>
-window.onload = function () {
-	malgnPlayer.setup({
-	targetID: "player",
-	video: {
-		primaryKey: "Gate1253", 
-		title: "Gate1253", 
-		thumbnail: "/logo.jpg",
-		source: "${target}"
-	}
-	});
-};
-</script>
-</head>
-<body style="background-color: white">
-  <div id="player" style="width: 100%; height: 100%"></div>
-</body>
-</html>`;
+					const html = getPlayerHtml(target);
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
 				}
 
 				// 요청 URL의 쿼리스트링에 with=webrtc, type=html 이 있는 경우 WebRTC HTML 응답
 				if (url.searchParams.get('with') === 'webrtc' && url.searchParams.get('type') === 'html') {
-					const html = `
-<!DOCTYPE html> 
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<title>WebRTC Call</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
-#remoteVideo {
-	position: fixed;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 100%;
-	object-fit: cover;
-	z-index: 1;
-}
-#localVideo {
-	position: fixed;
-	bottom: 20px;
-	right: 20px;
-	width: 200px;
-	height: 150px;
-	object-fit: cover;
-	z-index: 2;
-	border: 2px solid rgba(255,255,255,0.7);
-	border-radius: 8px;
-	transform: scaleX(-1);
-}
-#startButton {
-	position: fixed;
-	top: 50%;
-	left: 50%;
-	transform: translate(-50%, -50%);
-	z-index: 3;
-	padding: 15px 30px;
-	font-size: 20px;
-	background-color: #28a745;
-	color: white;
-	border: none;
-	border-radius: 8px;
-	cursor: pointer;
-}
-#statusMessage {
-	position: fixed;
-	top: 50%;
-	left: 50%;
-	transform: translate(-50%, -50%);
-	z-index: 4;
-	color: white;
-	font-size: 24px;
-	display: none;
-}
-</style>
-</head>
-<body>
-  <video id="remoteVideo" autoplay playsinline></video>
-  <video id="localVideo" autoplay playsinline muted></video>
-  <button id="startButton">Call</button>
-  <div id="statusMessage">연결 진행 중...</div>
-  <script>
-	const signalingUrl = "${target}";
-	const targetCode = "${targetCode}";
-	const localVideo = document.getElementById('localVideo');
-	const remoteVideo = document.getElementById('remoteVideo');
-	const startButton = document.getElementById('startButton');
-	const statusMessage = document.getElementById('statusMessage');
-	let localStream;
-	let peerConnection;
-	let pollInterval;
-	let candidateQueue = [];
-	const clientId = Date.now();
-	let lastTimestamp = 0;
-	
-	const rtcConfig = {
-		iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-	};
-
-	async function start() {
-		try {
-			localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-			localVideo.srcObject = localStream;
-			startButton.style.display = 'none';
-			statusMessage.style.display = 'block';
-			
-			sendSignal({ type: 'ready' });
-			pollInterval = setInterval(pollSignal, 2000);
-		} catch (err) {
-			console.error('Error accessing media devices.', err);
-		}
-	}
-
-	async function sendSignal(data) {
-		data.room = targetCode;
-		data.clientId = clientId;
-		try {
-			const response = await fetch(signalingUrl, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(data)
-			});
-			if (response.status === 403) {
-				const resData = await response.json();
-				if (resData.error === 'Room is full') {
-					alert('접속 인원이 초과되었습니다.');
-				}
-			}
-		} catch (e) { console.error(e); }
-	}
-
-	async function pollSignal() {
-		try {
-			const url = new URL(signalingUrl);
-			url.searchParams.append('room', targetCode);
-			const res = await fetch(url);
-			if (res.ok && res.status !== 204) {
-				const data = await res.json();
-				const messages = Array.isArray(data) ? data : [data];
-				messages.sort((a, b) => a.timestamp - b.timestamp);
-				for (const msg of messages) {
-					if (msg && msg.timestamp > lastTimestamp) {
-						lastTimestamp = msg.timestamp;
-						if (msg.clientId !== clientId) {
-							await handleMessage(msg);
-						}
-					}
-				}
-			}
-		} catch (e) { console.error(e); }
-	}
-
-	async function handleMessage(message) {
-		if (!peerConnection) createPeerConnection();
-		if (message.type === 'ready' && message.clientId < clientId) {
-			console.log('Creating Offer');
-			const offer = await peerConnection.createOffer();
-			console.log('Creating Offer setLocalDescription');
-			await peerConnection.setLocalDescription(offer);
-			console.log('Creating Offer setLocalDescription Complete');
-			sendSignal({ type: 'offer', sdp: offer.sdp });
-		} else if (message.type === 'offer') {
-			console.log('Received Offer, Creating Answer');
-			await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
-			while (candidateQueue.length > 0) {
-				try { await peerConnection.addIceCandidate(candidateQueue.shift()); } catch (e) { console.error(e); }
-			}
-			const answer = await peerConnection.createAnswer();
-			await peerConnection.setLocalDescription(answer);
-			sendSignal({ type: 'answer', sdp: answer.sdp });
-		} else if (message.type === 'answer') {
-			await peerConnection.setRemoteDescription(new RTCSessionDescription(message));
-			while (candidateQueue.length > 0) {
-				try { await peerConnection.addIceCandidate(candidateQueue.shift()); } catch (e) { console.error(e); }
-			}
-		} else if (message.type === 'candidate' && message.candidate) {
-			try {
-				if (peerConnection.remoteDescription) {
-					await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
-				} else {
-					candidateQueue.push(new RTCIceCandidate(message.candidate));
-				}
-			} catch (e) { console.error(e); }
-		}
-	}
-
-	function createPeerConnection() {
-		peerConnection = new RTCPeerConnection(rtcConfig);
-		candidateQueue = []; // 연결 생성 시 큐 초기화
-		
-		peerConnection.onconnectionstatechange = () => {
-			console.log('Connection State:', peerConnection.connectionState);
-			if (peerConnection.connectionState === 'connected') {
-				statusMessage.style.display = 'none';
-				clearInterval(pollInterval);
-			}
-		};
-
-		peerConnection.onicegatheringstatechange = () => {
-			console.log('ICE Gathering State:', peerConnection.iceGatheringState);
-		};
-
-		peerConnection.onicecandidate = (event) => {
-			if (event.candidate) {
-				console.log('ICE Candidate:', event.candidate);
-				sendSignal({ type: 'candidate', candidate: event.candidate });
-			}
-		};
-
-		peerConnection.ontrack = (event) => {
-			remoteVideo.srcObject = event.streams[0];
-		};
-
-		localStream.getTracks().forEach(track => {
-			peerConnection.addTrack(track, localStream);
-		});
-	}
-	
-	startButton.addEventListener('click', start);
-  </script>
-</body>
-</html>`;
+					const html = getWebRtcHtml(target, targetCode);
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
 				}
 
 				// 추가: R1 타입의 만료 시간 확인
 				const expirationTimestamp = await env.REQ_TIME_KV.get(targetCode);
-				
+
 				if (expirationTimestamp) {
 					const expirationTime = parseInt(expirationTimestamp, 10);
 					const currentTime = Date.now();
@@ -340,15 +117,15 @@ body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
 					finalTarget = targetUrl.toString();
 				}
 
-				return new Response(null, {status:302, headers: Object.assign({Location: finalTarget}, corsHeaders())});
+				return new Response(null, { status: 302, headers: Object.assign({ Location: finalTarget }, corsHeaders()) });
 			}
 		}
 		// URL을 찾지 못했거나 패턴에 맞지 않는 경우
-		return new Response(`Not found`, {status:404, headers: corsHeaders()});
+		return new Response(`Not found`, { status: 404, headers: corsHeaders() });
 	}
 
 	// GET 요청이 아니거나, GET 요청이지만 커스텀 코드 패턴이 아닌 경우
-	return new Response(`Not found`, {status:404, headers: corsHeaders()});
+	return new Response(`Not found`, { status: 404, headers: corsHeaders() });
 }
 
 export default {
