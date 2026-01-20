@@ -64,7 +64,7 @@ export function getChatHtml(target, targetCode) {
     </form>
 
     <script>
-        const wsUrl = "${target.replace('http', 'ws')}";
+        const wsUrl = "${target}";
         const targetCode = "${targetCode}";
         let nickname = "";
         let ws;
