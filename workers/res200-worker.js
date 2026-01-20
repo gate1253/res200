@@ -1,6 +1,7 @@
 
 import { getPlayerHtml } from './templates/playerTemplate.js';
 import { getWebRtcHtml } from './templates/webrtcTemplate.js';
+import { getChatHtml } from './templates/websocketTemplate.js';
 
 // CORS 유틸리티 함수
 function corsHeaders() {
@@ -83,6 +84,14 @@ export async function handleRequest(request, env) {
 					// Cloudflare TURN/STUN 설정을 환경 변수나 바인딩에서 가져올 수 있도록 구성 가능
 					const iceServers = env.ICE_SERVERS ? JSON.parse(env.ICE_SERVERS) : [];
 					const html = getWebRtcHtml(target, targetCode, iceServers);
+					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
+				}
+
+				// 새로운 기능: 웹소켓 채팅 (with=websocket&type=html)
+				if (url.searchParams.get('with') === 'websocket' && url.searchParams.get('type') === 'html') {
+					// 환경 변수에서 웹소켓 서버 주소를 가져오거나 기본값 사용
+					const wsTarget = env.WS_SERVER_URL || target;
+					const html = getChatHtml(wsTarget, targetCode);
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
 				}
 
