@@ -64,7 +64,11 @@ export function getChatHtml(target, targetCode) {
     </form>
 
     <script>
-        const wsUrl = "${target}";
+        // http:// -> ws://, https:// -> wss:// 로 변환하거나, 이미 ws인 경우 그대로 사용
+        let wsUrl = "${target}";
+        if (wsUrl.startsWith('http')) {
+            wsUrl = wsUrl.replace(/^http/, 'ws');
+        }
         const targetCode = "${targetCode}";
         let nickname = "";
         let ws;
