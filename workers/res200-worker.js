@@ -81,9 +81,16 @@ export async function handleRequest(request, env) {
 
 				// 요청 URL의 쿼리스트링에 with=webrtc, type=html 이 있는 경우 WebRTC HTML 응답
 				if (url.searchParams.get('with') === 'webrtc' && url.searchParams.get('type') === 'html') {
-					// Cloudflare TURN/STUN 설정을 API를 통해 동적으로 가져오기 (보안 강화)
+					// Cloudflare TURN/STUN 설정을 API를 통해 동적으로 가져오기 (보안 강화 + 캐싱)
 					let iceServers = [];
-					if (env.CF_TURN_ID && env.CF_TURN_KEY) {
+					const cacheKey = "ICE_SERVERS_CACHE";
+
+					// 1. 캐시 확인
+					const cached = await env.RES302_KV.get(cacheKey);
+					if (cached) {
+						iceServers = JSON.parse(cached);
+					} else if (env.CF_TURN_ID && env.CF_TURN_KEY) {
+						// 2. 캐시 없으면 API 호출
 						try {
 							const turnResponse = await fetch(
 								`https://rtc.live.cloudflare.com/v1/turn/keys/${env.CF_TURN_ID}/credentials/generate-ice-servers`,
@@ -93,12 +100,16 @@ export async function handleRequest(request, env) {
 										'Authorization': `Bearer ${env.CF_TURN_KEY}`,
 										'Content-Type': 'application/json'
 									},
-									body: JSON.stringify({ ttl: 86400 }) // 유효기간 24시간
+									body: JSON.stringify({ ttl: 86400 }) // API 내부 TTL은 24시간
 								}
 							);
 							if (turnResponse.ok) {
 								const turnData = await turnResponse.json();
 								iceServers = turnData.iceServers || [];
+								// 3. 결과를 KV에 1시간(3600초) 동안 캐싱
+								if (iceServers.length > 0) {
+									await env.RES302_KV.put(cacheKey, JSON.stringify(iceServers), { expirationTtl: 3600 });
+								}
 							}
 						} catch (e) {
 							console.error('Failed to fetch dynamic ICE servers:', e);
