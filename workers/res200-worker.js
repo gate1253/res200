@@ -81,8 +81,30 @@ export async function handleRequest(request, env) {
 
 				// 요청 URL의 쿼리스트링에 with=webrtc, type=html 이 있는 경우 WebRTC HTML 응답
 				if (url.searchParams.get('with') === 'webrtc' && url.searchParams.get('type') === 'html') {
-					// Cloudflare TURN/STUN 설정을 환경 변수나 바인딩에서 가져올 수 있도록 구성 가능
-					const iceServers = env.ICE_SERVERS ? JSON.parse(env.ICE_SERVERS) : [];
+					// Cloudflare TURN/STUN 설정을 API를 통해 동적으로 가져오기 (보안 강화)
+					let iceServers = [];
+					if (env.CF_TURN_ID && env.CF_TURN_KEY) {
+						try {
+							const turnResponse = await fetch(
+								`https://rtc.live.cloudflare.com/v1/turn/keys/${env.CF_TURN_ID}/credentials/generate-ice-servers`,
+								{
+									method: 'POST',
+									headers: {
+										'Authorization': `Bearer ${env.CF_TURN_KEY}`,
+										'Content-Type': 'application/json'
+									},
+									body: JSON.stringify({ ttl: 86400 }) // 유효기간 24시간
+								}
+							);
+							if (turnResponse.ok) {
+								const turnData = await turnResponse.json();
+								iceServers = turnData.iceServers || [];
+							}
+						} catch (e) {
+							console.error('Failed to fetch dynamic ICE servers:', e);
+						}
+					}
+
 					const html = getWebRtcHtml(target, targetCode, iceServers);
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
 				}

@@ -38,8 +38,9 @@ jobs:
           REQ_TIME_KV: ${{ secrets.REQ_TIME_KV }}
           # REQ_COUNT_KV 네임스페이스 ID
           REQ_COUNT_KV: ${{ secrets.REQ_COUNT_KV }}
-          # ICE_SERVERS (JSON string)
-          ICE_SERVERS: ${{ secrets.ICE_SERVERS }}
+          # Cloudflare TURN API Credentials
+          CF_TURN_ID: ${{ secrets.CF_TURN_ID }}
+          CF_TURN_KEY: ${{ secrets.CF_TURN_KEY }}
         run: |
           # Use unquoted heredoc to allow shell variable expansion
           cat > wrangler.toml <<EOF
@@ -55,7 +56,8 @@ jobs:
           ]
 
           [vars]
-          ICE_SERVERS = '${ICE_SERVERS}'
+          CF_TURN_ID = '${CF_TURN_ID}'
+          CF_TURN_KEY = '${CF_TURN_KEY}'
           EOF
           echo "wrangler.toml created."
           echo "---- wrangler.toml ----"
