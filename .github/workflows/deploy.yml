@@ -38,6 +38,8 @@ jobs:
           REQ_TIME_KV: ${{ secrets.REQ_TIME_KV }}
           # REQ_COUNT_KV 네임스페이스 ID
           REQ_COUNT_KV: ${{ secrets.REQ_COUNT_KV }}
+          # ICE_SERVERS (JSON string)
+          ICE_SERVERS: ${{ secrets.ICE_SERVERS }}
         run: |
           # Use unquoted heredoc to allow shell variable expansion
           cat > wrangler.toml <<EOF
@@ -51,6 +53,9 @@ jobs:
             { binding = "REQ_TIME_KV", id = "${REQ_TIME_KV}" },
             { binding = "REQ_COUNT_KV", id = "${REQ_COUNT_KV}" }
           ]
+
+          [vars]
+          ICE_SERVERS = '${ICE_SERVERS}'
           EOF
           echo "wrangler.toml created."
           echo "---- wrangler.toml ----"
@@ -60,7 +65,6 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          ICE_SERVERS: ${{ secrets.ICE_SERVERS }}
         run: |
           # install wrangler globally (Node 20)
           npm install -g wrangler
