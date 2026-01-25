@@ -52,7 +52,12 @@ export function getChatHtml(target, targetCode) {
     </div>
 
     <header>
-        <h1>실시간 채팅</h1>
+        <div>
+            <h1>실시간 채팅</h1>
+            <div id="user-count-badge" style="font-size: 0.75rem; color: #666; margin-top: 2px;">
+                접속자: <span id="user-count">0</span>명
+            </div>
+        </div>
         <span class="room-code"># ${targetCode}</span>
     </header>
 
@@ -79,6 +84,7 @@ export function getChatHtml(target, targetCode) {
         const chatForm = document.getElementById('chat-form');
         const msgInput = document.getElementById('msg-input');
         const chatMessages = document.getElementById('chat-messages');
+        const userCountSpan = document.getElementById('user-count');
 
         joinBtn.onclick = () => {
             const name = nickInput.value.trim();
@@ -100,9 +106,14 @@ export function getChatHtml(target, targetCode) {
                 const data = JSON.parse(e.data);
                 if(data.type === 'chat') {
                     appendMessage(data.nickname, data.message, false);
+                } else if (data.type === 'user-count') {
+                    userCountSpan.textContent = data.count;
                 }
             };
-            ws.onclose = () => appendStatus('연결이 끊어졌습니다. 새로고침 해주세요.');
+            ws.onclose = () => {
+                appendStatus('연결이 끊어졌습니다. 새로고침 해주세요.');
+                userCountSpan.textContent = '0';
+            };
         }
 
         chatForm.onsubmit = (e) => {
