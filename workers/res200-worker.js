@@ -23,6 +23,7 @@ function jsonResponse(obj, status = 200, extraHeaders = {}) {
 const definedPaths = [
 	'/favicon.ico',
 	'/logo.jpg',
+	'/404.jpg',
 	'/malgnPlayer.js',
 	'/js/notice2.c.js', '/js/notice0.c.js',
 	'/js/dashall.c.js', '/js/dashall.c.js.LICENSE.txt',
