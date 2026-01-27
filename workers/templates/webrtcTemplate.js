@@ -644,22 +644,22 @@ async function handleMessage(msg) {
     } else if (msg.type === 'leave') {
         removePeer(peerId);
         removePeer(peerId + '_screen');
-    } else if (msg.type === 'offer' && (msg.targetId === clientId || msg.targetId === screenClientId)) {
-        const isTargetScreen = msg.targetId === screenClientId;
-        const targetMap = isTargetScreen ? screenPeerConnections : peerConnections;
+    } else if (msg.type === 'offer') {
+        const isSenderScreen = peerId.toString().includes('_screen');
+        const targetMap = isSenderScreen ? screenPeerConnections : peerConnections;
         const pc = await createPeerConnection(peerId, false, msg.targetId, targetMap);
         await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         sendSignal({ type: 'answer', targetId: peerId, sdp: answer }, msg.targetId);
-    } else if (msg.type === 'answer' && (msg.targetId === clientId || msg.targetId === screenClientId)) {
-        const isTargetScreen = msg.targetId === screenClientId;
-        const targetMap = isTargetScreen ? screenPeerConnections : peerConnections;
+    } else if (msg.type === 'answer') {
+        const isSenderScreen = peerId.toString().includes('_screen');
+        const targetMap = isSenderScreen ? screenPeerConnections : peerConnections;
         const pc = targetMap[peerId];
         if (pc) await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
-    } else if (msg.type === 'candidate' && (msg.targetId === clientId || msg.targetId === screenClientId)) {
-        const isTargetScreen = msg.targetId === screenClientId;
-        const targetMap = isTargetScreen ? screenPeerConnections : peerConnections;
+    } else if (msg.type === 'candidate') {
+        const isSenderScreen = peerId.toString().includes('_screen');
+        const targetMap = isSenderScreen ? screenPeerConnections : peerConnections;
         const pc = targetMap[peerId];
         if (pc && msg.candidate) {
             pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(e => { });
@@ -701,7 +701,11 @@ async function createPeerConnection(peerId, isInitiator, myId, connectionMap) {
     };
 
     if (myId === clientId && localStream) {
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        // Only share camera if we are connecting to a person, NOT a screen share
+        const isRemoteScreen = peerId.toString().includes('_screen');
+        if (!isRemoteScreen) {
+            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        }
     } else if (myId === screenClientId && screenStream) {
         screenStream.getTracks().forEach(track => pc.addTrack(track, screenStream));
     }
