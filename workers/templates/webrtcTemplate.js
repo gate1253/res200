@@ -641,7 +641,7 @@ async function handleMessage(msg) {
         }
     } else if (msg.type === 'leave') {
         removePeer(peerId);
-        removePeer(peerId, true); // Try removing screen version too
+        removePeer(peerId + '_screen');
     } else if (msg.type === 'offer' && (msg.targetId === clientId || msg.targetId === screenClientId)) {
         const isTargetScreen = msg.targetId === screenClientId;
         const targetMap = isTargetScreen ? screenPeerConnections : peerConnections;
@@ -751,14 +751,16 @@ function updatePeerVideo(peerId, stream) {
     }
 }
 
-function removePeer(peerId, isScreen = false) {
-    const targetMap = isScreen ? screenPeerConnections : peerConnections;
-    const suffix = isScreen ? '-screen' : '';
-    if (targetMap[peerId]) {
-        targetMap[peerId].close();
-        delete targetMap[peerId];
-    }
-    const container = document.getElementById('container-' + peerId + suffix);
+function removePeer(peerId) {
+    // Check both maps
+    [peerConnections, screenPeerConnections].forEach(map => {
+        if (map[peerId]) {
+            map[peerId].close();
+            delete map[peerId];
+        }
+    });
+
+    const container = document.getElementById('container-' + peerId);
     if (container) {
         container.style.opacity = '0';
         container.style.transform = 'scale(0.8)';
@@ -799,6 +801,11 @@ toggleScreenBtn.onclick = async () => {
             const badge = document.getElementById('badge-' + screenClientId);
             if (badge) badge.textContent = 'Local Screen';
             sendSignal({ type: 'join' }, screenClientId);
+
+            // Proactively invite existing peers to the screen session
+            for (const id in peerConnections) {
+                await createPeerConnection(id, true, screenClientId, screenPeerConnections);
+            }
 
             screenStream.getVideoTracks()[0].onended = () => {
                 if (screenStream) toggleScreenBtn.click();
