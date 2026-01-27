@@ -180,7 +180,7 @@ video {
 }
 
 #localVideo {
-    transform: scaleX(-1);
+    /* Mirroring is now handled dynamically in JS */
 }
 
 #controls {
@@ -418,7 +418,7 @@ video {
         });
 selfieSegmentation.setOptions({
     modelSelection: 1, // 0 for landscape, 1 for close-up
-    selfieMode: true,
+    selfieMode: false,
 });
 selfieSegmentation.onResults(onSegmentationResults);
     }
@@ -432,9 +432,16 @@ function onSegmentationResults(results) {
     ctx.save();
     ctx.clearRect(0, 0, procCanvas.width, procCanvas.height);
 
-    // 1. Draw Background
+    // 1. Draw mask
+    ctx.drawImage(results.segmentationMask, 0, 0, procCanvas.width, procCanvas.height);
+
+    // 2. Draw person (source-in means only where the mask is)
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.drawImage(results.image, 0, 0, procCanvas.width, procCanvas.height);
+
+    // 3. Draw background behind person (destination-over)
+    ctx.globalCompositeOperation = 'destination-over';
     if (currentBgMode === 'blur') {
-        ctx.globalCompositeOperation = 'copy';
         ctx.filter = 'blur(15px)';
         ctx.drawImage(results.image, 0, 0, procCanvas.width, procCanvas.height);
         ctx.filter = 'none';
@@ -449,14 +456,6 @@ function onSegmentationResults(results) {
             ctx.fillRect(0, 0, procCanvas.width, procCanvas.height);
         }
     }
-
-    // 2. Masking (Show person)
-    ctx.globalCompositeOperation = 'destination-atop';
-    ctx.drawImage(results.segmentationMask, 0, 0, procCanvas.width, procCanvas.height);
-
-    // 3. Draw person
-    ctx.globalCompositeOperation = 'destination-atop';
-    ctx.drawImage(results.image, 0, 0, procCanvas.width, procCanvas.height);
 
     ctx.restore();
 }
@@ -491,6 +490,7 @@ async function start() {
         if (cameraStream) {
             localStream = cameraStream;
             localVideo.srcObject = localStream;
+            localVideo.style.transform = 'scaleX(-1)';
             if (!cameraStream.getVideoTracks().length) {
                 document.getElementById('localVideoContainer').classList.add('no-video');
                 isVideoOn = false;
@@ -514,6 +514,9 @@ async function replaceVideoTrack(newStream) {
     const newTrack = newStream.getVideoTracks()[0];
     localStream = newStream;
     localVideo.srcObject = localStream;
+
+    // Handle mirroring: mirror camera/canvas, not screen
+    localVideo.style.transform = (activeStreamType === 'screen' ? 'none' : 'scaleX(-1)');
 
     // Update track in all peer connections
     for (const peerId in peerConnections) {
