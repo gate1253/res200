@@ -414,7 +414,7 @@ video {
     function initSelfieSegmentation() {
         if (selfieSegmentation) return;
         selfieSegmentation = new SelfieSegmentation({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+            locateFile: (file) => 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/' + file
         });
 selfieSegmentation.setOptions({
     modelSelection: 1, // 0 for landscape, 1 for close-up
@@ -836,11 +836,10 @@ leaveBtn.onclick = () => {
         Object.keys(peerConnections).forEach(removePeer);
         if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
         if (screenStream) screenStream.getTracks().forEach(t => t.stop());
-        document.body.innerHTML = `
-                <div style="display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;gap:20px;">
-                    <h1 style="font-size:32px;font-weight:600;">회의가 종료되었습니다</h1>
-                    <button onclick="location.reload()" style="padding:12px 24px;border-radius:12px;border:none;background:var(--primary);color:white;cursor:pointer;font-family:inherit;">다시 참여하기</button>
-                </div>`;
+        document.body.innerHTML = '<div style="display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;gap:20px;">' +
+                    '<h1 style="font-size:32px;font-weight:600;">회의가 종료되었습니다</h1>' +
+                    '<button onclick="location.reload()" style="padding:12px 24px;border-radius:12px;border:none;background:var(--primary);color:white;cursor:pointer;font-family:inherit;">다시 참여하기</button>' +
+                '</div>';
     }
 };
 
