@@ -653,13 +653,15 @@ async function handleMessage(msg) {
         await pc.setLocalDescription(answer);
         sendSignal({ type: 'answer', targetId: peerId, sdp: answer }, msg.targetId);
     } else if (msg.type === 'answer') {
+        const isTargetScreen = msg.targetId === screenClientId;
         const isSenderScreen = peerId.toString().includes('_screen');
-        const targetMap = isSenderScreen ? screenPeerConnections : peerConnections;
+        const targetMap = (isTargetScreen || isSenderScreen) ? screenPeerConnections : peerConnections;
         const pc = targetMap[peerId];
         if (pc) await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
     } else if (msg.type === 'candidate') {
+        const isTargetScreen = msg.targetId === screenClientId;
         const isSenderScreen = peerId.toString().includes('_screen');
-        const targetMap = isSenderScreen ? screenPeerConnections : peerConnections;
+        const targetMap = (isTargetScreen || isSenderScreen) ? screenPeerConnections : peerConnections;
         const pc = targetMap[peerId];
         if (pc && msg.candidate) {
             pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(e => { });
