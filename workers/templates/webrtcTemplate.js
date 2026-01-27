@@ -435,9 +435,9 @@ function onSegmentationResults(results) {
     ctx.save();
     ctx.clearRect(0, 0, procCanvas.width, procCanvas.height);
 
-    // 1. Process mask: Sharp thresholding to remove "halo" and soften edges
+    // 1. Process mask: Ultra-sharp thresholding to remove "halo"
     const maskCtx = results.segmentationMask;
-    ctx.filter = 'blur(1px) contrast(2) brightness(1.2)'; // Sharpen mask boundary
+    ctx.filter = 'blur(1px) contrast(5) brightness(1.1) blur(0.5px)'; // Sharpen then slightly smooth
     ctx.drawImage(maskCtx, 0, 0, procCanvas.width, procCanvas.height);
     ctx.filter = 'none';
 
@@ -825,8 +825,11 @@ toggleScreenBtn.onclick = async () => {
             if (badge) badge.textContent = 'Local Screen';
             sendSignal({ type: 'join' }, screenClientId);
 
-            // Proactively invite existing peers to the screen session
+            // Proactively invite EVERYBODY to the screen session
+            // Filter out other screen IDs to prevent redundant screen-to-screen connections
             for (const id in peerConnections) {
+                if (id.includes('_screen')) continue;
+                console.log('Sending screen share offer to:', id);
                 await createPeerConnection(id, true, screenClientId, screenPeerConnections);
             }
 
