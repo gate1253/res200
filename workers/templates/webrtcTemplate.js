@@ -832,12 +832,12 @@ toggleScreenBtn.onclick = async () => {
             // Filter out other screen IDs to prevent redundant screen-to-screen connections
             const invitePromises = Object.keys(peerConnections).map(async (id) => {
                 if (id.includes('_screen')) return;
-                console.log(`[ScreenShare] Inviting peer ${ id } from sender ${ screenClientId } `);
+                console.log('[ScreenShare] Inviting peer ' + id + ' from sender ' + screenClientId);
                 try {
                     await createPeerConnection(id, true, screenClientId, screenPeerConnections);
-                    console.log(`[ScreenShare] Invitation sent to ${ id } `);
+                    console.log('[ScreenShare] Invitation sent to ' + id);
                 } catch (err) {
-                    console.error(`[ScreenShare] Failed to invite ${ id }: `, err);
+                    console.error('[ScreenShare] Failed to invite ' + id + ':', err);
                 }
             });
             await Promise.all(invitePromises);
