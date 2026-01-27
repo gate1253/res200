@@ -143,6 +143,14 @@ video {
 
 .video-container.no-video video { opacity: 0; }
 
+.video-container.screen-share-mode {
+    grid-column: 1 / -1;
+    min-height: 60vh;
+    order: -1;
+    background: #000;
+    z-index: 10;
+}
+
 .label {
     position: absolute;
     bottom: 20px;
@@ -737,6 +745,7 @@ function updatePeerVideo(peerId, stream) {
         video.id = 'video-' + peerId;
         video.autoplay = true; video.playsinline = true;
         if (isScreen) {
+            container.classList.add('screen-share-mode');
             video.style.objectFit = 'contain';
             video.style.transform = 'none';
         }
