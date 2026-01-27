@@ -144,11 +144,22 @@ video {
 .video-container.no-video video { opacity: 0; }
 
 .video-container.screen-share-mode {
-    grid-column: 1 / -1;
-    min-height: 60vh;
-    order: -1;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 50; /* Below controls (100) */
     background: #000;
-    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.video-container.screen-share-mode video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
 
 .label {
