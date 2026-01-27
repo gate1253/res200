@@ -144,19 +144,24 @@ video {
 .video-container.no-video video { opacity: 0; }
 
 .video-container.screen-share-mode {
+    cursor: zoom-in;
+}
+
+.video-container.screen-share-mode.expanded {
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
-    z-index: 50; /* Below controls (100) */
+    z-index: 50;
     background: #000;
     display: flex;
     align-items: center;
     justify-content: center;
+    cursor: zoom-out;
 }
 
-.video-container.screen-share-mode video {
+.video-container.screen-share-mode.expanded video {
     width: 100%;
     height: 100%;
     object-fit: contain;
@@ -759,6 +764,9 @@ function updatePeerVideo(peerId, stream) {
             container.classList.add('screen-share-mode');
             video.style.objectFit = 'contain';
             video.style.transform = 'none';
+            container.onclick = () => {
+                container.classList.toggle('expanded');
+            };
         }
 
         const label = document.createElement('div');
