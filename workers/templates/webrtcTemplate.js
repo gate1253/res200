@@ -435,9 +435,9 @@ function onSegmentationResults(results) {
     ctx.save();
     ctx.clearRect(0, 0, procCanvas.width, procCanvas.height);
 
-    // 1. Process mask: Thresholding to remove "halo" and soften edges
+    // 1. Process mask: Sharp thresholding to remove "halo" and soften edges
     const maskCtx = results.segmentationMask;
-    ctx.filter = 'blur(2px) contrast(1.2)'; // Slightly blur then contrast to sharpen boundary
+    ctx.filter = 'blur(1px) contrast(2) brightness(1.2)'; // Sharpen mask boundary
     ctx.drawImage(maskCtx, 0, 0, procCanvas.width, procCanvas.height);
     ctx.filter = 'none';
 
@@ -632,10 +632,12 @@ async function pollSignal() {
 async function handleMessage(msg) {
     const peerId = msg.clientId;
     if (msg.type === 'join') {
-        if (clientId.toString() < peerId.toString()) {
+        const isMsgScreen = peerId.toString().includes('_screen');
+        // Normal peer joins: use ID comparison to decide who initiates
+        if (!isMsgScreen && clientId.toString() < peerId.toString()) {
             await createPeerConnection(peerId, true, clientId, peerConnections);
         }
-        // If we are currently sharing screen, invite to OUR screen session
+        // If WE are currently sharing screen, proactively invite EVERY joiner
         if (screenStream) {
             await createPeerConnection(peerId, true, screenClientId, screenPeerConnections);
         }
