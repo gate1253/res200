@@ -632,11 +632,11 @@ async function pollSignal() {
 async function handleMessage(msg) {
     const peerId = msg.clientId;
     if (msg.type === 'join') {
-        if (clientId < peerId) {
+        if (clientId.toString() < peerId.toString()) {
             await createPeerConnection(peerId, true, clientId, peerConnections);
         }
-        // If we are currently sharing screen, invite the new joiner to our screen session too
-        if (activeStreamType === 'screen' && screenStream) {
+        // If we are currently sharing screen, invite the new joiner to our screen session
+        if (screenStream) {
             await createPeerConnection(peerId, true, screenClientId, screenPeerConnections);
         }
     } else if (msg.type === 'leave') {
@@ -723,7 +723,10 @@ function updatePeerVideo(peerId, stream) {
         const video = document.createElement('video');
         video.id = 'video-' + peerId;
         video.autoplay = true; video.playsinline = true;
-        if (isScreen) video.style.objectFit = 'contain';
+        if (isScreen) {
+            video.style.objectFit = 'contain';
+            video.style.transform = 'none';
+        }
 
         const label = document.createElement('div');
         label.className = 'label';
