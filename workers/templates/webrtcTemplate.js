@@ -426,14 +426,17 @@ selfieSegmentation.onResults(onSegmentationResults);
 function onSegmentationResults(results) {
     if (currentBgMode === 'none') return;
 
+    // Use source video resolution if possible
     procCanvas.width = results.image.width;
     procCanvas.height = results.image.height;
 
     ctx.save();
     ctx.clearRect(0, 0, procCanvas.width, procCanvas.height);
 
-    // 1. Draw mask
+    // 1. Smooth the mask edges slightly to reduce jaggedness
+    ctx.filter = 'blur(3px)';
     ctx.drawImage(results.segmentationMask, 0, 0, procCanvas.width, procCanvas.height);
+    ctx.filter = 'none';
 
     // 2. Draw person (source-in means only where the mask is)
     ctx.globalCompositeOperation = 'source-in';
@@ -467,6 +470,10 @@ async function processBg() {
     const videoElem = document.createElement('video');
     videoElem.srcObject = cameraStream;
     await videoElem.play();
+
+    // Use source video resolution
+    procCanvas.width = videoElem.videoWidth || 1280;
+    procCanvas.height = videoElem.videoHeight || 720;
 
     const sendToMediaPipe = async () => {
         if (currentBgMode === 'none') return;
@@ -761,8 +768,8 @@ toggleScreenBtn.onclick = async () => {
     } else {
         try {
             screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-            replaceVideoTrack(screenStream);
             activeStreamType = 'screen';
+            replaceVideoTrack(screenStream);
             toggleScreenBtn.classList.add('active');
             if (currentBgMode !== 'none') {
                 // Deactivate background if screen sharing starts
@@ -797,8 +804,8 @@ document.querySelectorAll('.bg-option').forEach(opt => {
         if (type === 'none') {
             currentBgMode = 'none';
             toggleBlurBtn.classList.remove('active');
-            replaceVideoTrack(cameraStream);
             activeStreamType = 'camera';
+            replaceVideoTrack(cameraStream);
         } else {
             if (activeStreamType === 'screen') toggleScreenBtn.click();
 
@@ -810,9 +817,9 @@ document.querySelectorAll('.bg-option').forEach(opt => {
             await processBg();
 
             if (activeStreamType !== 'canvas') {
+                activeStreamType = 'canvas';
                 processedStream = procCanvas.captureStream(30);
                 replaceVideoTrack(processedStream);
-                activeStreamType = 'canvas';
             }
         }
     };
@@ -827,7 +834,12 @@ bgColorInput.oninput = () => {
     currentBgMode = 'color';
     currentBgValue = bgColorInput.value;
     toggleBlurBtn.classList.add('active');
-    processBg(); // Ensure loop is running
+    processBg();
+    if (activeStreamType !== 'canvas') {
+        activeStreamType = 'canvas';
+        processedStream = procCanvas.captureStream(30);
+        replaceVideoTrack(processedStream);
+    }
 };
 
 window.onclick = () => bgMenu.classList.remove('show');
