@@ -392,8 +392,10 @@ video {
     let activeStreamType = 'camera'; // 'camera', 'screen', 'canvas'
 
     let ws;
-	const peerConnections = {}; // clientId: RTCPeerConnection
+	const peerConnections = {}; // clientId: RTCPeerConnection (Main)
+    const screenPeerConnections = {}; // clientId: RTCPeerConnection (Screen)
 	const clientId = Date.now() + Math.floor(Math.random() * 1000);
+    const screenClientId = clientId + '_screen';
 	const processedMessageIds = new Set();
 	let lastTimestamp = 0;
     
@@ -433,19 +435,22 @@ function onSegmentationResults(results) {
     ctx.save();
     ctx.clearRect(0, 0, procCanvas.width, procCanvas.height);
 
-    // 1. Smooth the mask edges slightly to reduce jaggedness
-    ctx.filter = 'blur(3px)';
-    ctx.drawImage(results.segmentationMask, 0, 0, procCanvas.width, procCanvas.height);
+    // 1. Process mask: Thresholding to remove "halo" and soften edges
+    const maskCtx = results.segmentationMask;
+    ctx.filter = 'blur(2px) contrast(1.2)'; // Slightly blur then contrast to sharpen boundary
+    ctx.drawImage(maskCtx, 0, 0, procCanvas.width, procCanvas.height);
     ctx.filter = 'none';
 
-    // 2. Draw person (source-in means only where the mask is)
+    // 2. Draw person (source-in)
     ctx.globalCompositeOperation = 'source-in';
     ctx.drawImage(results.image, 0, 0, procCanvas.width, procCanvas.height);
 
-    // 3. Draw background behind person (destination-over)
+    // 3. Draw background behind person
     ctx.globalCompositeOperation = 'destination-over';
+    
+    // Performance tip: only apply blur if mode is blur
     if (currentBgMode === 'blur') {
-        ctx.filter = 'blur(15px)';
+        ctx.filter = 'blur(15px) brightness(1.1)';
         ctx.drawImage(results.image, 0, 0, procCanvas.width, procCanvas.height);
         ctx.filter = 'none';
     } else if (currentBgMode === 'color') {
@@ -560,7 +565,7 @@ function connectWebSocket() {
                 userCountBadge.textContent = msg.count + ' Participants';
                 return;
             }
-            if (msg.clientId !== clientId) {
+            if (msg.clientId !== clientId && msg.clientId !== screenClientId) {
                 handleMessage(msg);
             }
         } catch (e) { console.error('WS parse error:', e); }
@@ -573,9 +578,9 @@ function connectWebSocket() {
     ws.onerror = (e) => console.error('WS error:', e);
 }
 
-async function sendSignal(data) {
+async function sendSignal(data, fromId = clientId) {
     data.room = targetCode;
-    data.clientId = clientId;
+    data.clientId = fromId;
     data.msgId = Math.random().toString(36).substring(2, 11);
     data.timestamp = Date.now();
 
@@ -611,7 +616,7 @@ async function pollSignal() {
             const messages = Array.isArray(data) ? data : [data];
             messages.sort((a, b) => a.timestamp - b.timestamp);
             for (const msg of messages) {
-                if (!msg || msg.clientId === clientId) continue;
+                if (!msg || msg.clientId === clientId || msg.clientId === screenClientId) continue;
                 const uniqueId = msg.timestamp + '-' + (msg.msgId || '0');
                 if (processedMessageIds.has(uniqueId)) continue;
                 processedMessageIds.add(uniqueId);
@@ -628,36 +633,47 @@ async function handleMessage(msg) {
     const peerId = msg.clientId;
     if (msg.type === 'join') {
         if (clientId < peerId) {
-            await createPeerConnection(peerId, true);
+            await createPeerConnection(peerId, true, clientId, peerConnections);
+        }
+        // If we are currently sharing screen, invite the new joiner to our screen session too
+        if (activeStreamType === 'screen' && screenStream) {
+            await createPeerConnection(peerId, true, screenClientId, screenPeerConnections);
         }
     } else if (msg.type === 'leave') {
         removePeer(peerId);
-    } else if (msg.type === 'offer' && msg.targetId === clientId) {
-        const pc = await createPeerConnection(peerId, false);
+        removePeer(peerId, true); // Try removing screen version too
+    } else if (msg.type === 'offer' && (msg.targetId === clientId || msg.targetId === screenClientId)) {
+        const isTargetScreen = msg.targetId === screenClientId;
+        const targetMap = isTargetScreen ? screenPeerConnections : peerConnections;
+        const pc = await createPeerConnection(peerId, false, msg.targetId, targetMap);
         await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        sendSignal({ type: 'answer', targetId: peerId, sdp: answer });
-    } else if (msg.type === 'answer' && msg.targetId === clientId) {
-        const pc = peerConnections[peerId];
+        sendSignal({ type: 'answer', targetId: peerId, sdp: answer }, msg.targetId);
+    } else if (msg.type === 'answer' && (msg.targetId === clientId || msg.targetId === screenClientId)) {
+        const isTargetScreen = msg.targetId === screenClientId;
+        const targetMap = isTargetScreen ? screenPeerConnections : peerConnections;
+        const pc = targetMap[peerId];
         if (pc) await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
-    } else if (msg.type === 'candidate' && msg.targetId === clientId) {
-        const pc = peerConnections[peerId];
+    } else if (msg.type === 'candidate' && (msg.targetId === clientId || msg.targetId === screenClientId)) {
+        const isTargetScreen = msg.targetId === screenClientId;
+        const targetMap = isTargetScreen ? screenPeerConnections : peerConnections;
+        const pc = targetMap[peerId];
         if (pc && msg.candidate) {
             pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(e => { });
         }
     }
 }
 
-async function createPeerConnection(peerId, isInitiator) {
-    if (peerConnections[peerId]) return peerConnections[peerId];
+async function createPeerConnection(peerId, isInitiator, myId, connectionMap) {
+    if (connectionMap[peerId]) return connectionMap[peerId];
 
     const pc = new RTCPeerConnection(rtcConfig);
-    peerConnections[peerId] = pc;
+    connectionMap[peerId] = pc;
 
     pc.onicecandidate = (event) => {
         if (event.candidate) {
-            sendSignal({ type: 'candidate', targetId: peerId, candidate: event.candidate });
+            sendSignal({ type: 'candidate', targetId: peerId, candidate: event.candidate }, myId);
         }
     };
 
@@ -677,14 +693,16 @@ async function createPeerConnection(peerId, isInitiator) {
         }
     };
 
-    if (localStream) {
+    if (myId === clientId && localStream) {
         localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    } else if (myId === screenClientId && screenStream) {
+        screenStream.getTracks().forEach(track => pc.addTrack(track, screenStream));
     }
 
     if (isInitiator) {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        sendSignal({ type: 'offer', targetId: peerId, sdp: offer });
+        sendSignal({ type: 'offer', targetId: peerId, sdp: offer }, myId);
     }
 
     updatePeerVideo(peerId, null);
@@ -692,20 +710,24 @@ async function createPeerConnection(peerId, isInitiator) {
 }
 
 function updatePeerVideo(peerId, stream) {
-    let container = document.getElementById('container-' + peerId);
+    const isScreen = peerId.toString().includes('_screen');
+    const containerId = 'container-' + peerId;
+    let container = document.getElementById(containerId);
+    
     if (!container) {
         container = document.createElement('div');
-        container.id = 'container-' + peerId;
+        container.id = containerId;
         container.className = 'video-container no-video';
-        container.setAttribute('data-initials', 'P');
+        container.setAttribute('data-initials', isScreen ? 'S' : 'P');
 
         const video = document.createElement('video');
         video.id = 'video-' + peerId;
         video.autoplay = true; video.playsinline = true;
+        if (isScreen) video.style.objectFit = 'contain';
 
         const label = document.createElement('div');
         label.className = 'label';
-        label.textContent = 'Participant';
+        label.textContent = isScreen ? 'Screen Share' : 'Participant';
 
         const badge = document.createElement('div');
         badge.id = 'badge-' + peerId;
@@ -726,12 +748,14 @@ function updatePeerVideo(peerId, stream) {
     }
 }
 
-function removePeer(peerId) {
-    if (peerConnections[peerId]) {
-        peerConnections[peerId].close();
-        delete peerConnections[peerId];
+function removePeer(peerId, isScreen = false) {
+    const targetMap = isScreen ? screenPeerConnections : peerConnections;
+    const suffix = isScreen ? '-screen' : '';
+    if (targetMap[peerId]) {
+        targetMap[peerId].close();
+        delete targetMap[peerId];
     }
-    const container = document.getElementById('container-' + peerId);
+    const container = document.getElementById('container-' + peerId + suffix);
     if (container) {
         container.style.opacity = '0';
         container.style.transform = 'scale(0.8)';
@@ -756,33 +780,29 @@ toggleVideoBtn.onclick = () => {
 
 // Screen Share Toggle Logic
 toggleScreenBtn.onclick = async () => {
-    if (activeStreamType === 'screen') {
-        // Revert to camera
-        replaceVideoTrack(cameraStream);
-        activeStreamType = 'camera';
+    if (screenStream) {
+        screenStream.getTracks().forEach(t => t.stop());
+        screenStream = null;
         toggleScreenBtn.classList.remove('active');
-        if (screenStream) {
-            screenStream.getTracks().forEach(t => t.stop());
-            screenStream = null;
-        }
+        sendSignal({ type: 'leave' }, screenClientId);
+        Object.keys(screenPeerConnections).forEach(id => removePeer(id, true));
+        const sc = document.getElementById('container-' + screenClientId);
+        if (sc) sc.remove();
     } else {
         try {
             screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-            activeStreamType = 'screen';
-            replaceVideoTrack(screenStream);
             toggleScreenBtn.classList.add('active');
-            if (currentBgMode !== 'none') {
-                // Deactivate background if screen sharing starts
-                currentBgMode = 'none';
-                toggleBlurBtn.classList.remove('active');
-                bgMenu.classList.remove('show');
-            }
+            updatePeerVideo(screenClientId, screenStream);
+            const badge = document.getElementById('badge-' + screenClientId);
+            if (badge) badge.textContent = 'Local Screen';
+            sendSignal({ type: 'join' }, screenClientId);
 
             screenStream.getVideoTracks()[0].onended = () => {
-                if (activeStreamType === 'screen') toggleScreenBtn.click();
+                if (screenStream) toggleScreenBtn.click();
             };
         } catch (e) {
             console.error('Screen share failed:', e);
+            toggleScreenBtn.classList.remove('active');
         }
     }
 };
@@ -807,8 +827,6 @@ document.querySelectorAll('.bg-option').forEach(opt => {
             activeStreamType = 'camera';
             replaceVideoTrack(cameraStream);
         } else {
-            if (activeStreamType === 'screen') toggleScreenBtn.click();
-
             currentBgMode = type;
             currentBgValue = value;
             if (type === 'image') bgImageObj.src = value;
