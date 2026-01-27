@@ -824,6 +824,9 @@ toggleScreenBtn.onclick = async () => {
             const badge = document.getElementById('badge-' + screenClientId);
             if (badge) badge.textContent = 'Local Screen';
             sendSignal({ type: 'join' }, screenClientId);
+            
+            // Wait for track readiness
+            await new Promise(r => setTimeout(r, 500));
 
             // Proactively invite EVERYBODY to the screen session
             // Filter out other screen IDs to prevent redundant screen-to-screen connections
