@@ -635,7 +635,7 @@ async function handleMessage(msg) {
         if (clientId.toString() < peerId.toString()) {
             await createPeerConnection(peerId, true, clientId, peerConnections);
         }
-        // If we are currently sharing screen, invite the new joiner to our screen session
+        // If we are currently sharing screen, invite to OUR screen session
         if (screenStream) {
             await createPeerConnection(peerId, true, screenClientId, screenPeerConnections);
         }
@@ -689,7 +689,12 @@ async function createPeerConnection(peerId, isInitiator, myId, connectionMap) {
             if (pc.connectionState === 'failed') badge.style.color = 'var(--danger)';
         }
         if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-            setTimeout(() => { if (pc.connectionState !== 'connected') removePeer(peerId); }, 5000);
+            // When a connection fails, only remove THAT specific connection in THAT map
+            setTimeout(() => { 
+                if (pc.connectionState !== 'connected' && connectionMap[peerId] === pc) {
+                    removePeerSession(peerId, connectionMap);
+                } 
+            }, 5000);
         }
     };
 
@@ -751,21 +756,32 @@ function updatePeerVideo(peerId, stream) {
     }
 }
 
-function removePeer(peerId) {
-    // Check both maps
-    [peerConnections, screenPeerConnections].forEach(map => {
-        if (map[peerId]) {
-            map[peerId].close();
-            delete map[peerId];
-        }
-    });
-
-    const container = document.getElementById('container-' + peerId);
-    if (container) {
-        container.style.opacity = '0';
-        container.style.transform = 'scale(0.8)';
-        setTimeout(() => container.remove(), 500);
+function removePeerSession(peerId, map) {
+    if (map[peerId]) {
+        map[peerId].close();
+        delete map[peerId];
     }
+    // Only remove UI if BOTH maps are empty for this user (or if it's a specific screen ID)
+    const isScreenId = peerId.toString().includes('_screen');
+    const baseId = isScreenId ? peerId.split('_')[0] : peerId;
+    const hasAny = peerConnections[baseId] || screenPeerConnections[baseId] || 
+                   peerConnections[baseId + '_screen'] || screenPeerConnections[baseId + '_screen'];
+    
+    if (!hasAny || isScreenId) {
+        const container = document.getElementById('container-' + peerId);
+        if (container) {
+            container.style.opacity = '0';
+            container.style.transform = 'scale(0.8)';
+            setTimeout(() => container.remove(), 500);
+        }
+    }
+}
+
+function removePeer(peerId) {
+    removePeerSession(peerId, peerConnections);
+    removePeerSession(peerId + '_screen', screenPeerConnections);
+    // Explicitly check the other way too just in case
+    removePeerSession(peerId, screenPeerConnections);
 }
 
 toggleMicBtn.onclick = () => {
@@ -790,7 +806,12 @@ toggleScreenBtn.onclick = async () => {
         screenStream = null;
         toggleScreenBtn.classList.remove('active');
         sendSignal({ type: 'leave' }, screenClientId);
-        Object.keys(screenPeerConnections).forEach(id => removePeer(id, true));
+        
+        // Local cleanup: ONLY close screen connections
+        for (const id in screenPeerConnections) {
+            removePeerSession(id, screenPeerConnections);
+        }
+        
         const sc = document.getElementById('container-' + screenClientId);
         if (sc) sc.remove();
     } else {
