@@ -830,11 +830,17 @@ toggleScreenBtn.onclick = async () => {
 
             // Proactively invite EVERYBODY to the screen session
             // Filter out other screen IDs to prevent redundant screen-to-screen connections
-            for (const id in peerConnections) {
-                if (id.includes('_screen')) continue;
-                console.log('Sending screen share offer to:', id);
-                await createPeerConnection(id, true, screenClientId, screenPeerConnections);
-            }
+            const invitePromises = Object.keys(peerConnections).map(async (id) => {
+                if (id.includes('_screen')) return;
+                console.log(`[ScreenShare] Inviting peer ${ id } from sender ${ screenClientId } `);
+                try {
+                    await createPeerConnection(id, true, screenClientId, screenPeerConnections);
+                    console.log(`[ScreenShare] Invitation sent to ${ id } `);
+                } catch (err) {
+                    console.error(`[ScreenShare] Failed to invite ${ id }: `, err);
+                }
+            });
+            await Promise.all(invitePromises);
 
             screenStream.getVideoTracks()[0].onended = () => {
                 if (screenStream) toggleScreenBtn.click();
