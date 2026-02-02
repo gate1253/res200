@@ -72,27 +72,26 @@ export async function handleRequest(request, env) {
 		// 그 외의 경우 (예: /{code} 패턴 또는 유효하지 않은 커스텀 코드 패턴)는 처리하지 않음
 
 		if (targetCode) {
-			const target = await env.RES302_KV.get(targetCode);
+			const target = env.RES302_KV ? await env.RES302_KV.get(targetCode) : null;
 			if (target) {
 
-				// 요청 URL의 쿼리스트링에 with=play, type=html 이 있는 경우 HTML 응답
+				// 1. Player
 				if (url.searchParams.get('with') === 'player' && url.searchParams.get('type') === 'html') {
 					const html = getPlayerHtml(target);
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
 				}
 
-				// 요청 URL의 쿼리스트링에 with=webrtc, type=html 이 있는 경우 WebRTC HTML 응답
+				// 2. WebRTC
 				if (url.searchParams.get('with') === 'webrtc' && url.searchParams.get('type') === 'html') {
-					// Cloudflare TURN/STUN 설정을 API를 통해 동적으로 가져오기 (보안 강화 + 캐싱)
 					let iceServers = [];
 					const cacheKey = "ICE_SERVERS_CACHE";
 
-					// 1. 캐시 확인
-					const cached = await env.RES302_KV.get(cacheKey);
-					if (cached) {
-						iceServers = JSON.parse(cached);
-					} else if (env.CF_TURN_ID && env.CF_TURN_KEY) {
-						// 2. 캐시 없으면 API 호출
+					if (env.RES302_KV) {
+						const cached = await env.RES302_KV.get(cacheKey);
+						if (cached) iceServers = JSON.parse(cached);
+					}
+
+					if (iceServers.length === 0 && env.CF_TURN_ID && env.CF_TURN_KEY) {
 						try {
 							const turnResponse = await fetch(
 								`https://rtc.live.cloudflare.com/v1/turn/keys/${env.CF_TURN_ID}/credentials/generate-ice-servers`,
@@ -102,14 +101,13 @@ export async function handleRequest(request, env) {
 										'Authorization': `Bearer ${env.CF_TURN_KEY}`,
 										'Content-Type': 'application/json'
 									},
-									body: JSON.stringify({ ttl: 86400 }) // API 내부 TTL은 24시간
+									body: JSON.stringify({ ttl: 86400 })
 								}
 							);
 							if (turnResponse.ok) {
 								const turnData = await turnResponse.json();
 								iceServers = turnData.iceServers || [];
-								// 3. 결과를 KV에 1시간(3600초) 동안 캐싱
-								if (iceServers.length > 0) {
+								if (iceServers.length > 0 && env.RES302_KV) {
 									await env.RES302_KV.put(cacheKey, JSON.stringify(iceServers), { expirationTtl: 3600 });
 								}
 							}
@@ -122,54 +120,47 @@ export async function handleRequest(request, env) {
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
 				}
 
-				// 새로운 기능: 웹소켓 채팅 (with=websocket&type=html)
+				// 3. WebSocket
 				if (url.searchParams.get('with') === 'websocket' && url.searchParams.get('type') === 'html') {
-					// 환경 변수에서 웹소켓 서버 주소를 가져오거나 기본값 사용
 					const wsTarget = env.WS_SERVER_URL || target;
 					const html = getChatHtml(wsTarget, targetCode);
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
 				}
 
-				// SFU Mode (Cloudflare Calls - Template Only)
-				// The actual API calls are proxied to the 'webrtc' worker
+				// 4. SFU (Cloudflare Calls)
 				if (url.searchParams.get('with') === 'sfu' && url.searchParams.get('type') === 'html') {
 					const wsTarget = env.WS_SERVER_URL || target;
-					const webrtcApiUrl = 'https://webrtc.gate1253.workers.dev';
+					const webrtcApiUrl = env.WEBRTC_API_URL || 'https://webrtc.gate1253.workers.dev';
 					const html = getSfuHtml(wsTarget, targetCode, webrtcApiUrl);
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
 				}
 
-				// 추가: R1 타입의 만료 시간 확인
-				const expirationTimestamp = await env.REQ_TIME_KV.get(targetCode);
-
-				if (expirationTimestamp) {
-					const expirationTime = parseInt(expirationTimestamp, 10);
-					const currentTime = Date.now();
-
-					// 현재 시간이 만료 시간보다 크면, 링크는 만료된 것입니다.
-					if (currentTime > expirationTime) {
-						return new Response('Forbidden: This link has expired.', { status: 403, headers: corsHeaders() });
+				// Expiration Check
+				if (env.REQ_TIME_KV) {
+					const expirationTimestamp = await env.REQ_TIME_KV.get(targetCode);
+					if (expirationTimestamp) {
+						const expirationTime = parseInt(expirationTimestamp, 10);
+						if (Date.now() > expirationTime) {
+							return new Response('Forbidden: This link has expired.', { status: 403, headers: corsHeaders() });
+						}
 					}
 				}
 
+				// Redirect / Count logic
 				let finalTarget = target;
-				const targetUrl = new URL(target);
-
-				// target URL의 쿼리스트링에 'cnt=${cnt}'가 있는지 확인합니다.
-				if (targetUrl.searchParams.get('cnt') === '${cnt}') {
-					// REQ_COUNT_KV에서 현재 카운트를 가져옵니다. 없으면 0으로 시작합니다.
-					let count = await env.REQ_COUNT_KV.get(targetCode);
-					count = count ? parseInt(count, 10) : 0;
-
-					// 카운트를 1 증가시킵니다.
-					const newCount = count + 1;
-
-					// 증가된 카운트를 KV에 다시 저장합니다.
-					await env.REQ_COUNT_KV.put(targetCode, newCount.toString());
-
-					// URL의 'cnt' 파라미터 값을 새로운 카운트로 교체합니다.
-					targetUrl.searchParams.set('cnt', newCount);
-					finalTarget = targetUrl.toString();
+				try {
+					const targetUrl = new URL(target);
+					if (targetUrl.searchParams.get('cnt') === '${cnt}' && env.REQ_COUNT_KV) {
+						let count = await env.REQ_COUNT_KV.get(targetCode);
+						count = count ? parseInt(count, 10) : 0;
+						const newCount = count + 1;
+						await env.REQ_COUNT_KV.put(targetCode, newCount.toString());
+						targetUrl.searchParams.set('cnt', newCount);
+						finalTarget = targetUrl.toString();
+					}
+				} catch (e) {
+					// target might not be a valid URL, just redirect to whatever it is if possible
+					console.warn('Invalid target URL for count increment:', target);
 				}
 
 				return new Response(null, { status: 302, headers: Object.assign({ Location: finalTarget }, corsHeaders()) });
