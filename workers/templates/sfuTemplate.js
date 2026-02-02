@@ -540,16 +540,24 @@ video {
         isRenegotiating = true;
         try {
             const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            
-            // Map transceivers
-            pc.getTransceivers().forEach(t => {
-                if (t._remoteInfo && t.mid) {
-                    transceiversMap.set(t.mid, { location: 'remote', ...t._remoteInfo });
-                    delete t._remoteInfo;
-                }
-            });
-            
+        if (pc.signalingState !== 'stable' && pc.localDescription && pc.localDescription.type === 'offer') return;
+
+        isRenegotiating = true;
+        try {
+            // Decide if we need to create an offer or if we are responding to one
+            let sessionDescription;
+            if (pc.signalingState === 'stable') {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                sessionDescription = pc.localDescription;
+            } else {
+                // Already in a state (e.g., have a remote offer), handle it accordingly
+                // In this flow, we assume renegotiate() is called after we want to sync local changes
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                sessionDescription = pc.localDescription;
+            }
+
             const tracks = [];
             const localTracksInfo = [];
             
@@ -573,14 +581,14 @@ video {
             });
             
             // CRITICAL: Use /tracks/new for OFFERS, /renegotiate for ANSWERS
-            const endpoint = pc.localDescription.type === 'offer' ? '/tracks/new' : '/renegotiate';
+            const endpoint = sessionDescription.type === 'offer' ? '/tracks/new' : '/renegotiate';
             
-            const res = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}\${endpoint}\`, {
+            const res = await fetch(apiUrl + `/ calls / sessions / ${ callsSessionId }${ endpoint } `, {
                 method: 'POST',
                 body: JSON.stringify({ 
                     sessionDescription: {
-                        sdp: pc.localDescription.sdp, 
-                        type: pc.localDescription.type, 
+                        sdp: sessionDescription.sdp, 
+                        type: sessionDescription.type, 
                     },
                     tracks 
                 })
@@ -588,14 +596,16 @@ video {
             const data = await res.json();
             
             if (!res.ok || (!data.sdp && !data.sessionDescription)) {
-                console.error('Renegotiate (Offer) failed:', data);
+                console.error('Renegotiate failed:', data);
                 statusMsg.textContent = 'Error: Renegotiation failed';
                 statusDot.className = 'dot error';
                 throw new Error(data.errorDescription || 'Renegotiation failed');
             }
     
             const remoteSdp = data.sdp || (data.sessionDescription ? data.sessionDescription.sdp : null);
-            await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: remoteSdp }));
+            const remoteType = data.type || (data.sessionDescription ? data.sessionDescription.type : 'answer');
+            
+            await pc.setRemoteDescription(new RTCSessionDescription({ type: remoteType, sdp: remoteSdp }));
             
             // Map mids from server response if available
             if (data.tracks) {
@@ -685,13 +695,7 @@ function handleRemoteTracksUpdate(msg) {
         const key = msg.sessionId + ':' + t.trackName;
         if (!subscribedTracks.has(key)) {
             subscribedTracks.add(key);
-            // We don't call addTransceiver here manually anymore? 
-            // Actually, Cloudflare will add them to the offer.
-            // But we need to keep track of the session/track info.
             tracksToSubscribe.push({ sessionId: msg.sessionId, trackName: t.trackName });
-
-            // Create a placeholder info for the track in our map so pc.ontrack knows what to do
-            // Note: mid will be assigned when the offer arrives.
         }
     });
 
