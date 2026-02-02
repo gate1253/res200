@@ -134,7 +134,8 @@ export async function handleRequest(request, env) {
 				// The actual API calls are proxied to the 'webrtc' worker
 				if (url.searchParams.get('with') === 'sfu' && url.searchParams.get('type') === 'html') {
 					const wsTarget = env.WS_SERVER_URL || target;
-					const html = getSfuHtml(wsTarget, targetCode);
+					const webrtcApiUrl = 'https://webrtc.gate1253.workers.dev';
+					const html = getSfuHtml(wsTarget, targetCode, webrtcApiUrl);
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
 				}
 

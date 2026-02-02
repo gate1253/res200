@@ -1,5 +1,5 @@
 
-export function getSfuHtml(target, targetCode) {
+export function getSfuHtml(target, targetCode, apiUrl) {
     return `
 <!DOCTYPE html> 
 <html lang="ko">
@@ -340,7 +340,7 @@ video {
   <script>
     const signalingUrl = "${target}";
     const targetCode = "${targetCode}";
-    const apiUrl = "https://webrtc.gate1253.workers.dev"; // API Worker
+    const apiUrl = "${apiUrl}"; // API Worker
     
     // UI Elements
     const videoGrid = document.getElementById('videoGrid');
