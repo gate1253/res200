@@ -514,65 +514,83 @@ video {
         container.innerHTML = \`
             <video id="video-\${sessionId}\${isScreen ? '-screen' : ''}" autoplay playsinline></video>
             <div class="label">\${isScreen ? 'Screen Share' : 'Participant'}</div>\`;
+        container.innerHTML = `
+        < video id = "video-${sessionId}${isScreen ? '-screen' : ''}" autoplay playsinline ></video >
+            <div class="label">${isScreen ? 'Screen Share' : 'Participant'}</div>`;
         
         videoGrid.appendChild(container);
         return container;
     }
     
+    let isRenegotiating = false;
+
     async function renegotiate() {
         if (!pc || !callsSessionId) return;
+        if (isRenegotiating) return;
+        if (pc.signalingState !== 'stable') return;
 
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        
-        // Map transceivers based on _remoteInfo if present
-        pc.getTransceivers().forEach(t => {
-            if (t._remoteInfo && t.mid) {
-                transceiversMap.set(t.mid, { location: 'remote', ...t._remoteInfo });
-                delete t._remoteInfo;
-            }
-        });
-        
-        const tracks = [];
-        const localTracksInfo = [];
-        
-        pc.getTransceivers().forEach(t => {
-             if (t.direction === 'sendonly' || t.direction === 'sendrecv') {
-                 let trackName = 'video';
-                 if (t.sender.track) {
-                     if (t.sender.track.kind === 'audio') trackName = 'audio';
-                     else if (screenStream && screenStream.getVideoTracks().includes(t.sender.track)) trackName = 'screen';
-                     else trackName = 'video';
+        isRenegotiating = true;
+        try {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            
+            // Map transceivers based on _remoteInfo if present
+            pc.getTransceivers().forEach(t => {
+                if (t._remoteInfo && t.mid) {
+                    transceiversMap.set(t.mid, { location: 'remote', ...t._remoteInfo });
+                    delete t._remoteInfo;
+                }
+            });
+            
+            const tracks = [];
+            const localTracksInfo = [];
+            
+            pc.getTransceivers().forEach(t => {
+                 if (t.direction === 'sendonly' || t.direction === 'sendrecv') {
+                     let trackName = 'video';
+                     if (t.sender.track) {
+                         if (t.sender.track.kind === 'audio') trackName = 'audio';
+                         else if (screenStream && screenStream.getVideoTracks().includes(t.sender.track)) trackName = 'screen';
+                         else trackName = 'video';
+                     }
+                     tracks.push({ location: 'local', mid: t.mid, trackName });
+                     localTracksInfo.push({ trackName, mid: t.mid });
+                     transceiversMap.set(t.mid, { location: 'local', trackName, sessionId: callsSessionId });
+                 } else if (t.direction === 'recvonly') {
+                     const mapped = transceiversMap.get(t.mid);
+                     if (mapped && mapped.location === 'remote') {
+                         tracks.push({ location: 'remote', sessionId: mapped.sessionId, trackName: mapped.trackName });
+                     }
                  }
-                 tracks.push({ location: 'local', mid: t.mid, trackName });
-                 localTracksInfo.push({ trackName, mid: t.mid });
-                 transceiversMap.set(t.mid, { location: 'local', trackName, sessionId: callsSessionId });
-             } else if (t.direction === 'recvonly') {
-                 const mapped = transceiversMap.get(t.mid);
-                 if (mapped && mapped.location === 'remote') {
-                     tracks.push({ location: 'remote', sessionId: mapped.sessionId, trackName: mapped.trackName });
-                 }
-             }
-        });
-        
-         const res = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}/renegotiate\`, {
-            method: 'POST',
-            body: JSON.stringify({ sdp: pc.localDescription.sdp, tracks })
-        });
-        const data = await res.json();
-        
-        if (!res.ok || !data.sdp) {
-            console.error('Renegotiate failed:', data);
-            statusMsg.textContent = 'Error: Renegotiation failed';
-            statusDot.className = 'dot error';
-            return;
-        }
+            });
+            
+             const res = await fetch(apiUrl + `/ calls / sessions / ${ callsSessionId }/renegotiate`, {
+    method: 'POST',
+        body: JSON.stringify({
+            sdp: pc.localDescription.sdp,
+            type: pc.localDescription.type,
+            tracks
+        })
+});
+const data = await res.json();
 
-        await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: data.sdp }));
-        
-        if (ws && ws.readyState === WebSocket.OPEN && localTracksInfo.length > 0) {
-            ws.send(JSON.stringify({ type: 'tracks-update', sessionId: callsSessionId, tracks: localTracksInfo, room: targetCode }));
-        }
+if (!res.ok || !data.sdp) {
+    console.error('Renegotiate failed:', data);
+    statusMsg.textContent = 'Error: Renegotiation failed';
+    statusDot.className = 'dot error';
+    throw new Error(data.errorDescription || 'Renegotiation failed');
+}
+
+await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: data.sdp }));
+
+if (ws && ws.readyState === WebSocket.OPEN && localTracksInfo.length > 0) {
+    ws.send(JSON.stringify({ type: 'tracks-update', sessionId: callsSessionId, tracks: localTracksInfo, room: targetCode }));
+}
+        } catch (e) {
+    console.error(e);
+} finally {
+    isRenegotiating = false;
+}
     }
 
 function connectWebSocket() {
@@ -681,7 +699,45 @@ function replaceVideoTrack(newTrack) {
 
 window.onclick = () => bgMenu.classList.remove('show');
 bgMenu.onclick = (e) => e.stopPropagation();
-leaveBtn.onclick = () => { if (confirm('Exit?')) { ws.close(); pc.close(); location.reload(); } };
+leaveBtn.onclick = () => {
+    if (confirm('Exit?')) {
+        if (ws) ws.close();
+        if (pc) pc.close();
+        if (localStream) localStream.getTracks().forEach(track => track.stop());
+        if (screenStream) screenStream.getTracks().forEach(track => track.stop());
+
+        videoGrid.innerHTML = '';
+        statusMsg.textContent = 'Disconnected';
+        statusDot.className = 'dot error';
+
+        // Show Rejoin Button
+        const rejoinBtn = document.createElement('button');
+        rejoinBtn.textContent = 'Rejoin';
+        rejoinBtn.style.padding = '10px 20px';
+        rejoinBtn.style.fontSize = '16px';
+        rejoinBtn.style.marginTop = '20px';
+        rejoinBtn.style.cursor = 'pointer';
+        rejoinBtn.style.background = '#4f46e5';
+        rejoinBtn.style.color = 'white';
+        rejoinBtn.style.border = 'none';
+        rejoinBtn.style.borderRadius = '8px';
+        rejoinBtn.onclick = () => location.reload();
+
+        const msgContainer = document.createElement('div');
+        msgContainer.style.position = 'fixed';
+        msgContainer.style.top = '50%';
+        msgContainer.style.left = '50%';
+        msgContainer.style.transform = 'translate(-50%, -50%)';
+        msgContainer.style.textAlign = 'center';
+        msgContainer.style.color = 'white';
+        msgContainer.innerHTML = '<h1>Session Ended</h1>';
+        msgContainer.appendChild(rejoinBtn);
+
+        document.body.appendChild(msgContainer);
+        document.getElementById('controls').style.display = 'none';
+        document.getElementById('header').style.display = 'none';
+    }
+};
 
 window.onload = start;
   </script >
