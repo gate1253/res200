@@ -377,6 +377,7 @@ video {
     
     const subscribedTracks = new Set();
     const transceiversMap = new Map();
+    let pendingRemoteTracks = [];
     
     // Init Selfie Segmentation
     let selfieSegmentation;
@@ -469,13 +470,11 @@ video {
             localVideo.srcObject = localStream;
             localVideo.style.transform = 'scaleX(-1)';
             
-            // 1. Create Cloudflare Session via WEBRTC API
             const sessionRes = await fetch(apiUrl + '/calls/session', { method: 'POST' });
             if (!sessionRes.ok) throw new Error('Failed to create Calls session');
             const sessionData = await sessionRes.json();
             callsSessionId = sessionData.sessionId;
             
-            // 2. Setup PC
             pc = new RTCPeerConnection({
                 iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }],
                 bundlePolicy: 'max-bundle'
@@ -484,25 +483,16 @@ video {
             pc.ontrack = (event) => {
                 const mid = event.transceiver.mid;
                 const info = transceiversMap.get(mid);
-                
                 if (info && info.location === 'remote') {
                     setupRemoteVideo(info, event.streams[0]);
-                } else {
-                    // Fallback: If not in map, maybe we can find it by looking at the track name if provided in some other way
-                    // In a production app, you'd use the transceiver.mid from the data mapping in the SDP
-                    console.log('Received track with mid:', mid);
                 }
             };
             
-            // Add local tracks (default: camera)
             cameraStream.getTracks().forEach(track => {
-               const t = pc.addTransceiver(track, { direction: 'sendonly' });
+               pc.addTransceiver(track, { direction: 'sendonly' });
             });
             
-            // 3. Connect WS
             connectWebSocket();
-            
-            // 4. Publish
             await renegotiate();
             
             statusMsg.textContent = 'Connected';
@@ -534,26 +524,13 @@ video {
     let isRenegotiating = false;
 
     async function renegotiate() {
-        if (!pc || !callsSessionId) return;
-        if (isRenegotiating) return;
-
+        if (!pc || !callsSessionId || isRenegotiating) return;
         isRenegotiating = true;
         try {
-            // Decide if we need to create an offer or if we are responding to one
-            let sessionDescription;
-            if (pc.signalingState === 'stable') {
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                sessionDescription = pc.localDescription;
-            } else {
-                // Already in a state (e.g., have a remote offer)
-                // If we are calling renegotiate manually while not stable, we might be in trouble
-                // but usually we call it after adding a transceiver
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                sessionDescription = pc.localDescription;
-            }
-
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            
+            const sessionDescription = pc.localDescription;
             const tracks = [];
             const localTracksInfo = [];
             
@@ -576,29 +553,14 @@ video {
                  }
             });
             
-            // CRITICAL: Use /tracks/new for OFFERS, /renegotiate for ANSWERS
-            const endpoint = sessionDescription.type === 'offer' ? '/tracks/new' : '/renegotiate';
-            
-            const res = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}\${endpoint}\`, {
+            const res = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}/tracks/new\`, {
                 method: 'POST',
-                body: JSON.stringify({ 
-                    sessionDescription: {
-                        sdp: sessionDescription.sdp, 
-                        type: sessionDescription.type, 
-                    },
-                    tracks 
-                })
+                body: JSON.stringify({ sessionDescription, tracks })
             });
             const data = await res.json();
             
-            if (!res.ok || (!data.sdp && !data.sessionDescription)) {
-                console.error('Renegotiate failed:', data);
-                statusMsg.textContent = 'Error: Renegotiation failed';
-                statusDot.className = 'dot error';
-                throw new Error(data.errorDescription || 'Renegotiation failed');
-            }
+            if (!res.ok) throw new Error(data.errorDescription || 'Renegotiation failed');
     
-            // Map mids from server response if available before setRemoteDescription
             if (data.tracks) {
                 data.tracks.forEach(t => {
                     if (t.mid) {
@@ -613,16 +575,16 @@ video {
 
             const remoteSdp = data.sdp || (data.sessionDescription ? data.sessionDescription.sdp : null);
             const remoteType = data.type || (data.sessionDescription ? data.sessionDescription.type : 'answer');
-            
             await pc.setRemoteDescription(new RTCSessionDescription({ type: remoteType, sdp: remoteSdp }));
 
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'tracks-update', sessionId: callsSessionId, tracks: localTracksInfo, room: targetCode }));
             }
         } catch (e) {
-            console.error(e);
+            console.error("Renegotiate Error:", e);
         } finally {
             isRenegotiating = false;
+            if (pendingRemoteTracks.length > 0) setTimeout(processPendingTracks, 100);
         }
     }
 
@@ -635,57 +597,52 @@ function connectWebSocket() {
         else if (msg.type === 'tracks-update' && msg.sessionId !== callsSessionId) handleRemoteTracksUpdate(msg);
         else if (msg.type === 'leave' && msg.sessionId !== callsSessionId) handleRemoteLeave(msg);
         else if (msg.type === 'join' && msg.sessionId !== callsSessionId) {
-            // New user joined, send them our current tracks if we have published any
-            const localTracksInfo = [];
-            pc.getTransceivers().forEach(t => {
-                if (t.direction === 'sendonly' || t.direction === 'sendrecv') {
-                    let trackName = 'video';
-                    if (t.sender.track) {
-                        if (t.sender.track.kind === 'audio') trackName = 'audio';
-                        else if (screenStream && screenStream.getVideoTracks().includes(t.sender.track)) trackName = 'screen';
-                        else trackName = 'video';
-                        localTracksInfo.push({ trackName, mid: t.mid });
-                    }
-                }
-            });
-            if (localTracksInfo.length > 0) {
-                ws.send(JSON.stringify({ type: 'tracks-update', sessionId: callsSessionId, tracks: localTracksInfo, room: targetCode }));
-            }
+            broadcastLocalTracks();
         }
     };
 }
 
-async function subscribeTracks(tracksToSubscribe) {
-    if (!pc || !callsSessionId || isRenegotiating) return;
+function broadcastLocalTracks() {
+    if (!pc || !ws || ws.readyState !== WebSocket.OPEN) return;
+    const localTracksInfo = [];
+    pc.getTransceivers().forEach(t => {
+        if ((t.direction === 'sendonly' || t.direction === 'sendrecv') && t.sender.track) {
+            let trackName = 'video';
+            if (t.sender.track.kind === 'audio') trackName = 'audio';
+            else if (screenStream && screenStream.getVideoTracks().includes(t.sender.track)) trackName = 'screen';
+            localTracksInfo.push({ trackName, mid: t.mid });
+        }
+    });
+    ws.send(JSON.stringify({ type: 'tracks-update', sessionId: callsSessionId, tracks: localTracksInfo, room: targetCode }));
+}
+
+async function processPendingTracks() {
+    if (!pc || !callsSessionId || isRenegotiating || pendingRemoteTracks.length === 0) return;
     
     isRenegotiating = true;
+    const tracksToProcess = [...pendingRemoteTracks];
+    pendingRemoteTracks = [];
+    
     try {
         const res = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}/tracks/new\`, {
             method: 'POST',
             body: JSON.stringify({
-                tracks: tracksToSubscribe.map(t => ({
-                    location: 'remote',
-                    sessionId: t.sessionId,
-                    trackName: t.trackName
+                tracks: tracksToProcess.map(t => ({
+                    location: 'remote', sessionId: t.sessionId, trackName: t.trackName
                 }))
             })
         });
         const data = await res.json();
-        
-        if (!res.ok) {
-            console.error('Subscription failed:', data);
-            throw new Error(data.errorDescription || 'Subscription failed');
-        }
+        if (!res.ok) throw new Error(data.errorDescription || 'Subscription failed');
 
         if (data.sessionDescription && data.sessionDescription.type === 'offer') {
             if (data.tracks) {
                 data.tracks.forEach(t => {
                     if (t.mid) {
                         transceiversMap.set(t.mid, { 
-                            location: t.location || 'remote', 
-                            sessionId: t.sessionId, 
-                            trackName: t.trackName 
+                            location: t.location || 'remote', sessionId: t.sessionId, trackName: t.trackName 
                         });
+                        subscribedTracks.add(t.sessionId + ':' + t.trackName);
                     }
                 });
             }
@@ -694,39 +651,34 @@ async function subscribeTracks(tracksToSubscribe) {
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             
-            const renegRes = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}/renegotiate\`, {
+            await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}/renegotiate\`, {
                 method: 'POST',
                 body: JSON.stringify({ 
-                    sessionDescription: {
-                        type: 'answer',
-                        sdp: pc.localDescription.sdp
-                    }
+                    sessionDescription: { type: 'answer', sdp: pc.localDescription.sdp }
                 })
             });
-            const renegData = await renegRes.json();
-            if (!renegRes.ok) throw new Error(renegData.errorDescription || 'Renegotiation failed');
         }
     } catch (e) {
-        console.error('SubscribeTracks Error:', e);
+        console.error('Subscription Error:', e);
+        pendingRemoteTracks = [...tracksToProcess, ...pendingRemoteTracks];
     } finally {
         isRenegotiating = false;
+        if (pendingRemoteTracks.length > 0) setTimeout(processPendingTracks, 500);
     }
 }
 
 function handleRemoteTracksUpdate(msg) {
     const currentRemoteTracks = new Set(msg.tracks.map(t => msg.sessionId + ':' + t.trackName));
-    const tracksToSubscribe = [];
     
-    // 1. Check for new tracks
     msg.tracks.forEach(t => {
         const key = msg.sessionId + ':' + t.trackName;
         if (!subscribedTracks.has(key)) {
-            subscribedTracks.add(key);
-            tracksToSubscribe.push({ sessionId: msg.sessionId, trackName: t.trackName });
+            if (!pendingRemoteTracks.some(p => p.sessionId === msg.sessionId && p.trackName === t.trackName)) {
+                pendingRemoteTracks.push({ sessionId: msg.sessionId, trackName: t.trackName });
+            }
         }
     });
 
-    // 2. Check for removed tracks
     for (let key of subscribedTracks) {
         if (key.startsWith(msg.sessionId + ':') && !currentRemoteTracks.has(key)) {
             subscribedTracks.delete(key);
@@ -735,22 +687,18 @@ function handleRemoteTracksUpdate(msg) {
         }
     }
 
-    if (tracksToSubscribe.length > 0) {
-        subscribeTracks(tracksToSubscribe);
-    }
+    if (pendingRemoteTracks.length > 0) processPendingTracks();
 }
 
 function handleRemoteLeave(msg) {
-    // Remove all tracks from this session
-    for (let key of subscribedTracks) {
+    for (let key of Array.from(subscribedTracks)) {
         if (key.startsWith(msg.sessionId + ':')) {
             subscribedTracks.delete(key);
         }
     }
-    const containers = document.querySelectorAll(\`[id ^= "container-\${msg.sessionId}"]\`);
+    const containers = document.querySelectorAll(\`[id^="container-\${msg.sessionId}"]\`);
     containers.forEach(c => c.remove());
     
-    // Stop transceivers related to this session
     pc.getTransceivers().forEach(t => {
         const mapped = transceiversMap.get(t.mid);
         if (mapped && mapped.sessionId === msg.sessionId) {
@@ -761,12 +709,11 @@ function handleRemoteLeave(msg) {
 }
 
 function removeRemoteTrackUI(sessionId, trackName) {
-    let containerId = 'container-' + sessionId;
-    if (trackName === 'screen') containerId += '-screen';
-    const container = document.getElementById(containerId);
-    if (container) container.remove();
+    let id = 'container-' + sessionId;
+    if (trackName === 'screen') id += '-screen';
+    const el = document.getElementById(id);
+    if (el) el.remove();
     
-    // Also stop the transceiver if we can find it
     pc.getTransceivers().forEach(t => {
         const mapped = transceiversMap.get(t.mid);
         if (mapped && mapped.sessionId === sessionId && mapped.trackName === trackName) {
@@ -853,7 +800,10 @@ window.onclick = () => bgMenu.classList.remove('show');
 bgMenu.onclick = (e) => e.stopPropagation();
 leaveBtn.onclick = () => {
     if (confirm('Exit?')) {
-        if (ws) ws.close();
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'leave', room: targetCode, sessionId: callsSessionId }));
+            ws.close();
+        }
         if (pc) pc.close();
         if (localStream) localStream.getTracks().forEach(track => track.stop());
         if (screenStream) screenStream.getTracks().forEach(track => track.stop());
@@ -862,7 +812,6 @@ leaveBtn.onclick = () => {
         statusMsg.textContent = 'Disconnected';
         statusDot.className = 'dot error';
 
-        // Show Rejoin Button
         const rejoinBtn = document.createElement('button');
         rejoinBtn.textContent = 'Rejoin';
         rejoinBtn.style.padding = '10px 20px';
@@ -892,8 +841,8 @@ leaveBtn.onclick = () => {
 };
 
 window.onload = start;
-  </script >
-</body >
-</html >
+  </script>
+</body>
+</html>
     `;
 }
