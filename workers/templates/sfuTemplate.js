@@ -560,124 +560,132 @@ video {
             body: JSON.stringify({ sdp: pc.localDescription.sdp, tracks })
         });
         const data = await res.json();
+        
+        if (!res.ok || !data.sdp) {
+            console.error('Renegotiate failed:', data);
+            statusMsg.textContent = 'Error: Renegotiation failed';
+            statusDot.className = 'dot error';
+            return;
+        }
+
         await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: data.sdp }));
         
         if (ws && ws.readyState === WebSocket.OPEN && localTracksInfo.length > 0) {
             ws.send(JSON.stringify({ type: 'tracks-update', sessionId: callsSessionId, tracks: localTracksInfo, room: targetCode }));
         }
     }
-    
-    function connectWebSocket() {
-        ws = new WebSocket(signalingUrl);
-        ws.onopen = () => ws.send(JSON.stringify({ type: 'join', room: targetCode, sessionId: callsSessionId }));
-        ws.onmessage = (e) => {
-            const msg = JSON.parse(e.data);
-            if (msg.type === 'user-count') userCountBadge.textContent = msg.count + ' Participants';
-            else if (msg.type === 'tracks-update' && msg.sessionId !== callsSessionId) handleRemoteTracksUpdate(msg);
-            else if (msg.type === 'leave') handleRemoteLeave(msg);
-        };
-    }
-    
-    function handleRemoteTracksUpdate(msg) {
-        let needsReneg = false;
-        msg.tracks.forEach(t => {
-            const key = msg.sessionId + ':' + t.trackName;
-            if (!subscribedTracks.has(key)) {
-                subscribedTracks.add(key);
-                const transceiver = pc.addTransceiver(t.trackName === 'audio' ? 'audio' : 'video', { direction: 'recvonly' });
-                transceiver._remoteInfo = { sessionId: msg.sessionId, trackName: t.trackName };
-                needsReneg = true;
-            }
-        });
-        if (needsReneg) renegotiate();
-    }
-    
-    function handleRemoteLeave(msg) {
-        // Simple UI cleanup helper
-        const baseId = msg.clientId; // We expect this might be different if mapped.
-        // If we can't map, we can't clean up easily.
-    }
-    
-    toggleMicBtn.onclick = () => {
-        isMicOn = !isMicOn;
-        localStream.getAudioTracks().forEach(t => t.enabled = isMicOn);
-        toggleMicBtn.classList.toggle('off', !isMicOn);
+
+function connectWebSocket() {
+    ws = new WebSocket(signalingUrl);
+    ws.onopen = () => ws.send(JSON.stringify({ type: 'join', room: targetCode, sessionId: callsSessionId }));
+    ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'user-count') userCountBadge.textContent = msg.count + ' Participants';
+        else if (msg.type === 'tracks-update' && msg.sessionId !== callsSessionId) handleRemoteTracksUpdate(msg);
+        else if (msg.type === 'leave') handleRemoteLeave(msg);
     };
-    
-    toggleVideoBtn.onclick = () => {
-        isVideoOn = !isVideoOn;
-        if (cameraStream) cameraStream.getVideoTracks().forEach(t => t.enabled = isVideoOn);
-        toggleVideoBtn.classList.toggle('off', !isVideoOn);
-        document.getElementById('localVideoContainer').classList.toggle('no-video', !isVideoOn);
-    };
-    
-    toggleScreenBtn.onclick = async () => {
-        if (screenStream) {
-            screenStream.getTracks().forEach(t => t.stop());
-            screenStream = null;
-            toggleScreenBtn.classList.remove('active');
-             pc.getTransceivers().forEach(t => {
-                 const mapped = transceiversMap.get(t.mid);
-                 if (mapped && mapped.location === 'local' && mapped.trackName === 'screen') {
-                     t.direction = 'inactive';
-                     t.sender.replaceTrack(null);
-                 }
-             });
-             await renegotiate();
-        } else {
-            try {
-                screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-                toggleScreenBtn.classList.add('active');
-                pc.addTransceiver(screenStream.getVideoTracks()[0], { direction: 'sendonly' });
-                await renegotiate();
-                screenStream.getVideoTracks()[0].onended = () => toggleScreenBtn.click();
-            } catch(e) {
-                console.error(e);
-            }
-        }
-    };
-    
-    toggleBlurBtn.onclick = (e) => { e.stopPropagation(); bgMenu.classList.toggle('show'); };
-    document.querySelectorAll('.bg-option').forEach(opt => {
-        opt.onclick = async () => {
-            document.querySelectorAll('.bg-option').forEach(el => el.classList.remove('active'));
-            opt.classList.add('active');
-            const type = opt.dataset.type;
-            const value = opt.dataset.value;
-            if (type === 'none') {
-                currentBgMode = 'none';
-                replaceVideoTrack(cameraStream.getVideoTracks()[0]);
-            } else {
-                currentBgMode = type;
-                currentBgValue = value;
-                if (type === 'image') bgImageObj.src = value;
-                await processBg();
-                if (activeStreamType !== 'canvas') {
-                    activeStreamType = 'canvas';
-                    processedStream = procCanvas.captureStream(30);
-                    replaceVideoTrack(processedStream.getVideoTracks()[0]);
-                }
-            }
+}
+
+function handleRemoteTracksUpdate(msg) {
+    let needsReneg = false;
+    msg.tracks.forEach(t => {
+        const key = msg.sessionId + ':' + t.trackName;
+        if (!subscribedTracks.has(key)) {
+            subscribedTracks.add(key);
+            const transceiver = pc.addTransceiver(t.trackName === 'audio' ? 'audio' : 'video', { direction: 'recvonly' });
+            transceiver._remoteInfo = { sessionId: msg.sessionId, trackName: t.trackName };
+            needsReneg = true;
         }
     });
+    if (needsReneg) renegotiate();
+}
 
-    function replaceVideoTrack(newTrack) {
-        pc.getSenders().forEach(s => {
-            const t = s.track;
-            if (t && t.kind === 'video') {
-                s.replaceTrack(newTrack);
+function handleRemoteLeave(msg) {
+    // Simple UI cleanup helper
+    const baseId = msg.clientId; // We expect this might be different if mapped.
+    // If we can't map, we can't clean up easily.
+}
+
+toggleMicBtn.onclick = () => {
+    isMicOn = !isMicOn;
+    localStream.getAudioTracks().forEach(t => t.enabled = isMicOn);
+    toggleMicBtn.classList.toggle('off', !isMicOn);
+};
+
+toggleVideoBtn.onclick = () => {
+    isVideoOn = !isVideoOn;
+    if (cameraStream) cameraStream.getVideoTracks().forEach(t => t.enabled = isVideoOn);
+    toggleVideoBtn.classList.toggle('off', !isVideoOn);
+    document.getElementById('localVideoContainer').classList.toggle('no-video', !isVideoOn);
+};
+
+toggleScreenBtn.onclick = async () => {
+    if (screenStream) {
+        screenStream.getTracks().forEach(t => t.stop());
+        screenStream = null;
+        toggleScreenBtn.classList.remove('active');
+        pc.getTransceivers().forEach(t => {
+            const mapped = transceiversMap.get(t.mid);
+            if (mapped && mapped.location === 'local' && mapped.trackName === 'screen') {
+                t.direction = 'inactive';
+                t.sender.replaceTrack(null);
             }
         });
-        localVideo.srcObject = new MediaStream([newTrack]);
+        await renegotiate();
+    } else {
+        try {
+            screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            toggleScreenBtn.classList.add('active');
+            pc.addTransceiver(screenStream.getVideoTracks()[0], { direction: 'sendonly' });
+            await renegotiate();
+            screenStream.getVideoTracks()[0].onended = () => toggleScreenBtn.click();
+        } catch (e) {
+            console.error(e);
+        }
     }
-    
-    window.onclick = () => bgMenu.classList.remove('show');
-    bgMenu.onclick = (e) => e.stopPropagation();
-    leaveBtn.onclick = () => { if(confirm('Exit?')) { ws.close(); pc.close(); location.reload(); } };
-    
-    window.onload = start;
-  </script>
-</body>
-</html>
+};
+
+toggleBlurBtn.onclick = (e) => { e.stopPropagation(); bgMenu.classList.toggle('show'); };
+document.querySelectorAll('.bg-option').forEach(opt => {
+    opt.onclick = async () => {
+        document.querySelectorAll('.bg-option').forEach(el => el.classList.remove('active'));
+        opt.classList.add('active');
+        const type = opt.dataset.type;
+        const value = opt.dataset.value;
+        if (type === 'none') {
+            currentBgMode = 'none';
+            replaceVideoTrack(cameraStream.getVideoTracks()[0]);
+        } else {
+            currentBgMode = type;
+            currentBgValue = value;
+            if (type === 'image') bgImageObj.src = value;
+            await processBg();
+            if (activeStreamType !== 'canvas') {
+                activeStreamType = 'canvas';
+                processedStream = procCanvas.captureStream(30);
+                replaceVideoTrack(processedStream.getVideoTracks()[0]);
+            }
+        }
+    }
+});
+
+function replaceVideoTrack(newTrack) {
+    pc.getSenders().forEach(s => {
+        const t = s.track;
+        if (t && t.kind === 'video') {
+            s.replaceTrack(newTrack);
+        }
+    });
+    localVideo.srcObject = new MediaStream([newTrack]);
+}
+
+window.onclick = () => bgMenu.classList.remove('show');
+bgMenu.onclick = (e) => e.stopPropagation();
+leaveBtn.onclick = () => { if (confirm('Exit?')) { ws.close(); pc.close(); location.reload(); } };
+
+window.onload = start;
+  </script >
+</body >
+</html >
     `;
 }
