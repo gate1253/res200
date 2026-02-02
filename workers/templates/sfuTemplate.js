@@ -424,6 +424,7 @@ video {
     }
     
     function setupRemoteVideo(info, stream) {
+        console.info('[SFU] setupRemoteVideo:', info.sessionId, info.trackName);
         let containerId = 'container-' + info.sessionId;
         if (info.trackName === 'screen') containerId += '-screen';
         
@@ -437,7 +438,7 @@ video {
         if (video) {
             if (video.srcObject !== stream) {
                 video.srcObject = stream;
-                video.play().catch(e => console.error("Video play failed:", e));
+                video.play().catch(e => console.error("[SFU] Video play failed:", e));
                 container.classList.remove('no-video');
             }
         }
@@ -463,7 +464,7 @@ video {
         try {
             statusMsg.textContent = 'Acquiring Media...';
             cameraStream = await navigator.mediaDevices.getUserMedia({
-                video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+                video: { width: { ideal: 640 }, height: { ideal: 360 } },
                 audio: true
             });
             localStream = cameraStream;
@@ -483,6 +484,7 @@ video {
             pc.ontrack = (event) => {
                 const mid = event.transceiver.mid;
                 const info = transceiversMap.get(mid);
+                console.info('[SFU] pc.ontrack:', mid, info, event.track.kind);
                 if (info && info.location === 'remote') {
                     setupRemoteVideo(info, event.streams[0]);
                 }
@@ -578,10 +580,17 @@ video {
             await pc.setRemoteDescription(new RTCSessionDescription({ type: remoteType, sdp: remoteSdp }));
 
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'tracks-update', sessionId: callsSessionId, tracks: localTracksInfo, room: targetCode }));
+                console.info('[SFU] Sending tracks-update after renegotiate');
+                ws.send(JSON.stringify({ 
+                    type: 'tracks-update', 
+                    sessionId: callsSessionId, 
+                    clientId: callsSessionId, 
+                    tracks: localTracksInfo, 
+                    room: targetCode 
+                }));
             }
         } catch (e) {
-            console.error("Renegotiate Error:", e);
+            console.error("[SFU] Renegotiate Error:", e);
         } finally {
             isRenegotiating = false;
             if (pendingRemoteTracks.length > 0) setTimeout(processPendingTracks, 100);
@@ -589,14 +598,26 @@ video {
     }
 
 function connectWebSocket() {
+    console.info('[SFU] Connecting WebSocket...');
     ws = new WebSocket(signalingUrl);
-    ws.onopen = () => ws.send(JSON.stringify({ type: 'join', room: targetCode, sessionId: callsSessionId }));
+    ws.onopen = () => {
+        console.info('[SFU] WebSocket Connected');
+        ws.send(JSON.stringify({ 
+            type: 'join', 
+            room: targetCode, 
+            sessionId: callsSessionId,
+            clientId: callsSessionId 
+        }));
+        // Ensure others see us even if renegotiate finished before onopen
+        broadcastLocalTracks();
+    };
     ws.onmessage = (e) => {
         const msg = JSON.parse(e.data);
+        console.info('[SFU] WS Message:', msg.type, msg.sessionId || msg.clientId);
         if (msg.type === 'user-count') userCountBadge.textContent = msg.count + ' Participants';
-        else if (msg.type === 'tracks-update' && msg.sessionId !== callsSessionId) handleRemoteTracksUpdate(msg);
-        else if (msg.type === 'leave' && msg.sessionId !== callsSessionId) handleRemoteLeave(msg);
-        else if (msg.type === 'join' && msg.sessionId !== callsSessionId) {
+        else if (msg.type === 'tracks-update' && (msg.sessionId !== callsSessionId && msg.clientId !== callsSessionId)) handleRemoteTracksUpdate(msg);
+        else if (msg.type === 'leave' && (msg.sessionId !== callsSessionId && msg.clientId !== callsSessionId)) handleRemoteLeave(msg);
+        else if (msg.type === 'join' && (msg.sessionId !== callsSessionId && msg.clientId !== callsSessionId)) {
             broadcastLocalTracks();
         }
     };
@@ -604,6 +625,7 @@ function connectWebSocket() {
 
 function broadcastLocalTracks() {
     if (!pc || !ws || ws.readyState !== WebSocket.OPEN) return;
+    console.info('[SFU] Broadcasting local tracks');
     const localTracksInfo = [];
     pc.getTransceivers().forEach(t => {
         if ((t.direction === 'sendonly' || t.direction === 'sendrecv') && t.sender.track) {
@@ -613,7 +635,13 @@ function broadcastLocalTracks() {
             localTracksInfo.push({ trackName, mid: t.mid });
         }
     });
-    ws.send(JSON.stringify({ type: 'tracks-update', sessionId: callsSessionId, tracks: localTracksInfo, room: targetCode }));
+    ws.send(JSON.stringify({ 
+        type: 'tracks-update', 
+        sessionId: callsSessionId, 
+        clientId: callsSessionId, 
+        tracks: localTracksInfo, 
+        room: targetCode 
+    }));
 }
 
 async function processPendingTracks() {
@@ -659,7 +687,7 @@ async function processPendingTracks() {
             });
         }
     } catch (e) {
-        console.error('Subscription Error:', e);
+        console.error('[SFU] Subscription Error:', e);
         pendingRemoteTracks = [...tracksToProcess, ...pendingRemoteTracks];
     } finally {
         isRenegotiating = false;
@@ -668,22 +696,25 @@ async function processPendingTracks() {
 }
 
 function handleRemoteTracksUpdate(msg) {
-    const currentRemoteTracks = new Set(msg.tracks.map(t => msg.sessionId + ':' + t.trackName));
+    const sid = msg.sessionId || msg.clientId;
+    if (!sid) return;
+    console.info('[SFU] handleRemoteTracksUpdate from:', sid);
+    const currentRemoteTracks = new Set(msg.tracks.map(t => sid + ':' + t.trackName));
     
     msg.tracks.forEach(t => {
-        const key = msg.sessionId + ':' + t.trackName;
+        const key = sid + ':' + t.trackName;
         if (!subscribedTracks.has(key)) {
-            if (!pendingRemoteTracks.some(p => p.sessionId === msg.sessionId && p.trackName === t.trackName)) {
-                pendingRemoteTracks.push({ sessionId: msg.sessionId, trackName: t.trackName });
+            if (!pendingRemoteTracks.some(p => p.sessionId === sid && p.trackName === t.trackName)) {
+                pendingRemoteTracks.push({ sessionId: sid, trackName: t.trackName });
             }
         }
     });
 
     for (let key of subscribedTracks) {
-        if (key.startsWith(msg.sessionId + ':') && !currentRemoteTracks.has(key)) {
+        if (key.startsWith(sid + ':') && !currentRemoteTracks.has(key)) {
             subscribedTracks.delete(key);
             const trackName = key.split(':')[1];
-            removeRemoteTrackUI(msg.sessionId, trackName);
+            removeRemoteTrackUI(sid, trackName);
         }
     }
 
@@ -691,32 +722,36 @@ function handleRemoteTracksUpdate(msg) {
 }
 
 function handleRemoteLeave(msg) {
+    const sid = msg.sessionId || msg.clientId;
+    if (!sid) return;
+    console.info('[SFU] handleRemoteLeave from:', sid);
     for (let key of Array.from(subscribedTracks)) {
-        if (key.startsWith(msg.sessionId + ':')) {
+        if (key.startsWith(sid + ':')) {
             subscribedTracks.delete(key);
         }
     }
-    const containers = document.querySelectorAll(\`[id^="container-\${msg.sessionId}"]\`);
+    const containers = document.querySelectorAll(\`[id^="container-\${sid}"]\`);
     containers.forEach(c => c.remove());
     
     pc.getTransceivers().forEach(t => {
         const mapped = transceiversMap.get(t.mid);
-        if (mapped && mapped.sessionId === msg.sessionId) {
+        if (mapped && mapped.sessionId === sid) {
             t.direction = 'inactive';
             transceiversMap.delete(t.mid);
         }
     });
 }
 
-function removeRemoteTrackUI(sessionId, trackName) {
-    let id = 'container-' + sessionId;
+function removeRemoteTrackUI(sid, trackName) {
+    console.info('[SFU] removeRemoteTrackUI:', sid, trackName);
+    let id = 'container-' + sid;
     if (trackName === 'screen') id += '-screen';
     const el = document.getElementById(id);
     if (el) el.remove();
     
     pc.getTransceivers().forEach(t => {
         const mapped = transceiversMap.get(t.mid);
-        if (mapped && mapped.sessionId === sessionId && mapped.trackName === trackName) {
+        if (mapped && mapped.sessionId === sid && mapped.trackName === trackName) {
             t.direction = 'inactive';
             transceiversMap.delete(t.mid);
         }
@@ -801,7 +836,13 @@ bgMenu.onclick = (e) => e.stopPropagation();
 leaveBtn.onclick = () => {
     if (confirm('Exit?')) {
         if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'leave', room: targetCode, sessionId: callsSessionId }));
+            console.info('[SFU] Sending leave signal and closing WS');
+            ws.send(JSON.stringify({ 
+                type: 'leave', 
+                room: targetCode, 
+                sessionId: callsSessionId,
+                clientId: callsSessionId
+            }));
             ws.close();
         }
         if (pc) pc.close();
