@@ -41,6 +41,9 @@ jobs:
           # Cloudflare TURN API Credentials
           CF_TURN_ID: ${{ secrets.CF_TURN_ID }}
           CF_TURN_KEY: ${{ secrets.CF_TURN_KEY }}
+          # Cloudflare Calls Credentials
+          CF_CALLS_APP_ID: ${{ secrets.CF_CALLS_APP_ID }}
+          CF_CALLS_APP_TOKEN: ${{ secrets.CF_CALLS_APP_TOKEN }}
         run: |
           # Use unquoted heredoc to allow shell variable expansion
           cat > wrangler.toml <<EOF
@@ -58,6 +61,8 @@ jobs:
           [vars]
           CF_TURN_ID = '${CF_TURN_ID}'
           CF_TURN_KEY = '${CF_TURN_KEY}'
+          CF_CALLS_APP_ID = '${CF_CALLS_APP_ID}'
+          CF_CALLS_APP_TOKEN = '${CF_CALLS_APP_TOKEN}'
           EOF
           echo "wrangler.toml created."
           echo "---- wrangler.toml ----"

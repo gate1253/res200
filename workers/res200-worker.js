@@ -1,6 +1,6 @@
-
 import { getPlayerHtml } from './templates/playerTemplate.js';
 import { getWebRtcHtml } from './templates/webrtcTemplate.js';
+import { getSfuHtml } from './templates/sfuTemplate.js';
 import { getChatHtml } from './templates/websocketTemplate.js';
 
 // CORS 유틸리티 함수
@@ -53,6 +53,7 @@ export async function handleRequest(request, env) {
 			headers: Object.assign({ 'Location': destinationURL }, corsHeaders())
 		});
 	}
+
 
 	// GET /{uniqueUserId}/{alias} 패턴만 처리
 	if (request.method === 'GET' && pathname.length > 1) {
@@ -129,6 +130,14 @@ export async function handleRequest(request, env) {
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
 				}
 
+				// SFU Mode (Cloudflare Calls - Template Only)
+				// The actual API calls are proxied to the 'webrtc' worker
+				if (url.searchParams.get('with') === 'sfu' && url.searchParams.get('type') === 'html') {
+					const wsTarget = env.WS_SERVER_URL || target;
+					const html = getSfuHtml(wsTarget, targetCode);
+					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
+				}
+
 				// 추가: R1 타입의 만료 시간 확인
 				const expirationTimestamp = await env.REQ_TIME_KV.get(targetCode);
 
@@ -165,7 +174,6 @@ export async function handleRequest(request, env) {
 				return new Response(null, { status: 302, headers: Object.assign({ Location: finalTarget }, corsHeaders()) });
 			}
 		}
-		// URL을 찾지 못했거나 패턴에 맞지 않는 경우
 		return new Response(`Not found`, { status: 404, headers: corsHeaders() });
 	}
 
