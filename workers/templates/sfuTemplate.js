@@ -542,7 +542,7 @@ video {
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             
-            // Map transceivers based on _remoteInfo if present
+            // Map transceivers
             pc.getTransceivers().forEach(t => {
                 if (t._remoteInfo && t.mid) {
                     transceiversMap.set(t.mid, { location: 'remote', ...t._remoteInfo });
@@ -572,18 +572,23 @@ video {
                  }
             });
             
-             const res = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}/renegotiate\`, {
+            // CRITICAL: Use /tracks/new for OFFERS, /renegotiate for ANSWERS
+            const endpoint = pc.localDescription.type === 'offer' ? '/tracks/new' : '/renegotiate';
+            
+            const res = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}\${endpoint}\`, {
                 method: 'POST',
                 body: JSON.stringify({ 
-                    sdp: pc.localDescription.sdp, 
-                    type: pc.localDescription.type, 
+                    sessionDescription: {
+                        sdp: pc.localDescription.sdp, 
+                        type: pc.localDescription.type, 
+                    },
                     tracks 
                 })
             });
             const data = await res.json();
             
             if (!res.ok || (!data.sdp && !data.sessionDescription)) {
-                console.error('Renegotiate failed:', data);
+                console.error('Renegotiate (Offer) failed:', data);
                 statusMsg.textContent = 'Error: Renegotiation failed';
                 statusDot.className = 'dot error';
                 throw new Error(data.errorDescription || 'Renegotiation failed');
@@ -609,10 +614,10 @@ video {
                 ws.send(JSON.stringify({ type: 'tracks-update', sessionId: callsSessionId, tracks: localTracksInfo, room: targetCode }));
             }
         } catch (e) {
-    console.error(e);
-} finally {
-    isRenegotiating = false;
-}
+            console.error(e);
+        } finally {
+            isRenegotiating = false;
+        }
     }
 
 function connectWebSocket() {
