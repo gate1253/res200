@@ -616,7 +616,7 @@ video {
             
             await pc.setRemoteDescription(new RTCSessionDescription({ type: remoteType, sdp: remoteSdp }));
 
-            if (ws && ws.readyState === WebSocket.OPEN && localTracksInfo.length > 0) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'tracks-update', sessionId: callsSessionId, tracks: localTracksInfo, room: targetCode }));
             }
         } catch (e) {
@@ -633,73 +633,91 @@ function connectWebSocket() {
         const msg = JSON.parse(e.data);
         if (msg.type === 'user-count') userCountBadge.textContent = msg.count + ' Participants';
         else if (msg.type === 'tracks-update' && msg.sessionId !== callsSessionId) handleRemoteTracksUpdate(msg);
-        else if (msg.type === 'leave') handleRemoteLeave(msg);
+        else if (msg.type === 'leave' && msg.sessionId !== callsSessionId) handleRemoteLeave(msg);
+        else if (msg.type === 'join' && msg.sessionId !== callsSessionId) {
+            // New user joined, send them our current tracks if we have published any
+            const localTracksInfo = [];
+            pc.getTransceivers().forEach(t => {
+                if (t.direction === 'sendonly' || t.direction === 'sendrecv') {
+                    let trackName = 'video';
+                    if (t.sender.track) {
+                        if (t.sender.track.kind === 'audio') trackName = 'audio';
+                        else if (screenStream && screenStream.getVideoTracks().includes(t.sender.track)) trackName = 'screen';
+                        else trackName = 'video';
+                        localTracksInfo.push({ trackName, mid: t.mid });
+                    }
+                }
+            });
+            if (localTracksInfo.length > 0) {
+                ws.send(JSON.stringify({ type: 'tracks-update', sessionId: callsSessionId, tracks: localTracksInfo, room: targetCode }));
+            }
+        }
     };
 }
 
-    async function subscribeTracks(tracksToSubscribe) {
-        if (!pc || !callsSessionId || isRenegotiating) return;
+async function subscribeTracks(tracksToSubscribe) {
+    if (!pc || !callsSessionId || isRenegotiating) return;
+    
+    isRenegotiating = true;
+    try {
+        const res = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}/tracks/new\`, {
+            method: 'POST',
+            body: JSON.stringify({
+                tracks: tracksToSubscribe.map(t => ({
+                    location: 'remote',
+                    sessionId: t.sessionId,
+                    trackName: t.trackName
+                }))
+            })
+        });
+        const data = await res.json();
         
-        isRenegotiating = true;
-        try {
-            const res = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}/tracks/new\`, {
+        if (!res.ok) {
+            console.error('Subscription failed:', data);
+            throw new Error(data.errorDescription || 'Subscription failed');
+        }
+
+        if (data.sessionDescription && data.sessionDescription.type === 'offer') {
+            if (data.tracks) {
+                data.tracks.forEach(t => {
+                    if (t.mid) {
+                        transceiversMap.set(t.mid, { 
+                            location: t.location || 'remote', 
+                            sessionId: t.sessionId, 
+                            trackName: t.trackName 
+                        });
+                    }
+                });
+            }
+
+            await pc.setRemoteDescription(new RTCSessionDescription(data.sessionDescription));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            
+            const renegRes = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}/renegotiate\`, {
                 method: 'POST',
-                body: JSON.stringify({
-                    tracks: tracksToSubscribe.map(t => ({
-                        location: 'remote',
-                        sessionId: t.sessionId,
-                        trackName: t.trackName
-                    }))
+                body: JSON.stringify({ 
+                    sessionDescription: {
+                        type: 'answer',
+                        sdp: pc.localDescription.sdp
+                    }
                 })
             });
-            const data = await res.json();
-            
-            if (!res.ok) {
-                console.error('Subscription failed:', data);
-                throw new Error(data.errorDescription || 'Subscription failed');
-            }
-
-            // Cloudflare often sends an offer in response to tracks/new
-            if (data.sessionDescription && data.sessionDescription.type === 'offer') {
-                // IMPORTANT: Map mids before setting remote description so ontrack can find info
-                if (data.tracks) {
-                    data.tracks.forEach(t => {
-                        if (t.mid) {
-                            transceiversMap.set(t.mid, { 
-                                location: t.location || 'remote', 
-                                sessionId: t.sessionId, 
-                                trackName: t.trackName 
-                            });
-                        }
-                    });
-                }
-
-                await pc.setRemoteDescription(new RTCSessionDescription(data.sessionDescription));
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-                
-                // Send answer back via renegotiate
-                const renegRes = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}/renegotiate\`, {
-                    method: 'POST',
-                    body: JSON.stringify({ 
-                        sessionDescription: {
-                            type: 'answer',
-                            sdp: pc.localDescription.sdp
-                        }
-                    })
-                });
-                const renegData = await renegRes.json();
-                if (!renegRes.ok) throw new Error(renegData.errorDescription || 'Renegotiation failed');
-            }
-        } catch (e) {
-            console.error('SubscribeTracks Error:', e);
-        } finally {
-            isRenegotiating = false;
+            const renegData = await renegRes.json();
+            if (!renegRes.ok) throw new Error(renegData.errorDescription || 'Renegotiation failed');
         }
+    } catch (e) {
+        console.error('SubscribeTracks Error:', e);
+    } finally {
+        isRenegotiating = false;
     }
+}
 
 function handleRemoteTracksUpdate(msg) {
+    const currentRemoteTracks = new Set(msg.tracks.map(t => msg.sessionId + ':' + t.trackName));
     const tracksToSubscribe = [];
+    
+    // 1. Check for new tracks
     msg.tracks.forEach(t => {
         const key = msg.sessionId + ':' + t.trackName;
         if (!subscribedTracks.has(key)) {
@@ -708,15 +726,54 @@ function handleRemoteTracksUpdate(msg) {
         }
     });
 
+    // 2. Check for removed tracks
+    for (let key of subscribedTracks) {
+        if (key.startsWith(msg.sessionId + ':') && !currentRemoteTracks.has(key)) {
+            subscribedTracks.delete(key);
+            const trackName = key.split(':')[1];
+            removeRemoteTrackUI(msg.sessionId, trackName);
+        }
+    }
+
     if (tracksToSubscribe.length > 0) {
         subscribeTracks(tracksToSubscribe);
     }
 }
 
 function handleRemoteLeave(msg) {
-    // Simple UI cleanup helper
-    const baseId = msg.clientId; // We expect this might be different if mapped.
-    // If we can't map, we can't clean up easily.
+    // Remove all tracks from this session
+    for (let key of subscribedTracks) {
+        if (key.startsWith(msg.sessionId + ':')) {
+            subscribedTracks.delete(key);
+        }
+    }
+    const containers = document.querySelectorAll(`[id ^= "container-${msg.sessionId}"]`);
+    containers.forEach(c => c.remove());
+    
+    // Stop transceivers related to this session
+    pc.getTransceivers().forEach(t => {
+        const mapped = transceiversMap.get(t.mid);
+        if (mapped && mapped.sessionId === msg.sessionId) {
+            t.direction = 'inactive';
+            transceiversMap.delete(t.mid);
+        }
+    });
+}
+
+function removeRemoteTrackUI(sessionId, trackName) {
+    let containerId = 'container-' + sessionId;
+    if (trackName === 'screen') containerId += '-screen';
+    const container = document.getElementById(containerId);
+    if (container) container.remove();
+    
+    // Also stop the transceiver if we can find it
+    pc.getTransceivers().forEach(t => {
+        const mapped = transceiversMap.get(t.mid);
+        if (mapped && mapped.sessionId === sessionId && mapped.trackName === trackName) {
+            t.direction = 'inactive';
+            transceiversMap.delete(t.mid);
+        }
+    });
 }
 
 toggleMicBtn.onclick = () => {
