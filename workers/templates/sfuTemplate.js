@@ -514,9 +514,6 @@ video {
         container.innerHTML = \`
             <video id="video-\${sessionId}\${isScreen ? '-screen' : ''}" autoplay playsinline></video>
             <div class="label">\${isScreen ? 'Screen Share' : 'Participant'}</div>\`;
-        container.innerHTML = `
-        < video id = "video-${sessionId}${isScreen ? '-screen' : ''}" autoplay playsinline ></video >
-            <div class="label">${isScreen ? 'Screen Share' : 'Participant'}</div>`;
         
         videoGrid.appendChild(container);
         return container;
@@ -564,28 +561,28 @@ video {
                  }
             });
             
-             const res = await fetch(apiUrl + `/ calls / sessions / ${ callsSessionId }/renegotiate`, {
-    method: 'POST',
-        body: JSON.stringify({
-            sdp: pc.localDescription.sdp,
-            type: pc.localDescription.type,
-            tracks
-        })
-});
-const data = await res.json();
-
-if (!res.ok || !data.sdp) {
-    console.error('Renegotiate failed:', data);
-    statusMsg.textContent = 'Error: Renegotiation failed';
-    statusDot.className = 'dot error';
-    throw new Error(data.errorDescription || 'Renegotiation failed');
-}
-
-await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: data.sdp }));
-
-if (ws && ws.readyState === WebSocket.OPEN && localTracksInfo.length > 0) {
-    ws.send(JSON.stringify({ type: 'tracks-update', sessionId: callsSessionId, tracks: localTracksInfo, room: targetCode }));
-}
+             const res = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}/renegotiate\`, {
+                method: 'POST',
+                body: JSON.stringify({ 
+                    sdp: pc.localDescription.sdp, 
+                    type: pc.localDescription.type, 
+                    tracks 
+                })
+            });
+            const data = await res.json();
+            
+            if (!res.ok || !data.sdp) {
+                console.error('Renegotiate failed:', data);
+                statusMsg.textContent = 'Error: Renegotiation failed';
+                statusDot.className = 'dot error';
+                throw new Error(data.errorDescription || 'Renegotiation failed');
+            }
+    
+            await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: data.sdp }));
+            
+            if (ws && ws.readyState === WebSocket.OPEN && localTracksInfo.length > 0) {
+                ws.send(JSON.stringify({ type: 'tracks-update', sessionId: callsSessionId, tracks: localTracksInfo, room: targetCode }));
+            }
         } catch (e) {
     console.error(e);
 } finally {
