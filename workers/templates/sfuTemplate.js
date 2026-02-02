@@ -422,6 +422,25 @@ video {
         ctx.restore();
     }
     
+    function setupRemoteVideo(info, stream) {
+        let containerId = 'container-' + info.sessionId;
+        if (info.trackName === 'screen') containerId += '-screen';
+        
+        let container = document.getElementById(containerId);
+        if (!container) {
+             container = createVideoContainer(info.sessionId, info.trackName === 'screen');
+        }
+        
+        const videoId = 'video-' + info.sessionId + (info.trackName === 'screen' ? '-screen' : '');
+        const video = document.getElementById(videoId);
+        if (video) {
+            if (video.srcObject !== stream) {
+                video.srcObject = stream;
+                container.classList.remove('no-video');
+            }
+        }
+    }
+
     async function processBg() {
         if (!cameraStream) return;
         initSelfieSegmentation();
@@ -464,21 +483,13 @@ video {
             pc.ontrack = (event) => {
                 const mid = event.transceiver.mid;
                 const info = transceiversMap.get(mid);
+                
                 if (info && info.location === 'remote') {
-                    let containerId = 'container-' + info.sessionId;
-                    if (info.trackName === 'screen') containerId += '-screen';
-                    
-                    let container = document.getElementById(containerId);
-                    if (!container) {
-                         container = createVideoContainer(info.sessionId, info.trackName === 'screen');
-                    }
-                    
-                    const videoId = 'video-' + info.sessionId + (info.trackName === 'screen' ? '-screen' : '');
-                    const video = document.getElementById(videoId);
-                    if (video) {
-                        video.srcObject = event.streams[0];
-                        container.classList.remove('no-video');
-                    }
+                    setupRemoteVideo(info, event.streams[0]);
+                } else {
+                    // Fallback: If not in map, maybe we can find it by looking at the track name if provided in some other way
+                    // In a production app, you'd use the transceiver.mid from the data mapping in the SDP
+                    console.log('Received track with mid:', mid);
                 }
             };
             
@@ -571,15 +582,29 @@ video {
             });
             const data = await res.json();
             
-            if (!res.ok || !data.sdp) {
+            if (!res.ok || (!data.sdp && !data.sessionDescription)) {
                 console.error('Renegotiate failed:', data);
                 statusMsg.textContent = 'Error: Renegotiation failed';
                 statusDot.className = 'dot error';
                 throw new Error(data.errorDescription || 'Renegotiation failed');
             }
     
-            await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: data.sdp }));
+            const remoteSdp = data.sdp || (data.sessionDescription ? data.sessionDescription.sdp : null);
+            await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: remoteSdp }));
             
+            // Map mids from server response if available
+            if (data.tracks) {
+                data.tracks.forEach(t => {
+                    if (t.mid) {
+                        transceiversMap.set(t.mid, { 
+                            location: t.location || 'remote', 
+                            sessionId: t.sessionId, 
+                            trackName: t.trackName 
+                        });
+                    }
+                });
+            }
+
             if (ws && ws.readyState === WebSocket.OPEN && localTracksInfo.length > 0) {
                 ws.send(JSON.stringify({ type: 'tracks-update', sessionId: callsSessionId, tracks: localTracksInfo, room: targetCode }));
             }
@@ -601,18 +626,73 @@ function connectWebSocket() {
     };
 }
 
+    async function subscribeTracks(tracksToSubscribe) {
+        if (!pc || !callsSessionId || isRenegotiating) return;
+        
+        isRenegotiating = true;
+        try {
+            const res = await fetch(apiUrl + `/ calls / sessions / ${ callsSessionId } /tracks/new`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    tracks: tracksToSubscribe.map(t => ({
+                        location: 'remote',
+                        sessionId: t.sessionId,
+                        trackName: t.trackName
+                    }))
+                })
+            });
+            const data = await res.json();
+            
+            if (!res.ok) {
+                console.error('Subscription failed:', data);
+                throw new Error(data.errorDescription || 'Subscription failed');
+            }
+
+            // Cloudflare often sends an offer in response to tracks/new
+            if (data.sessionDescription && data.sessionDescription.type === 'offer') {
+                await pc.setRemoteDescription(new RTCSessionDescription(data.sessionDescription));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                
+                // Send answer back via renegotiate
+                const renegRes = await fetch(apiUrl + `/ calls / sessions / ${ callsSessionId }/renegotiate`, {
+    method: 'POST',
+        body: JSON.stringify({
+            sessionDescription: {
+                type: 'answer',
+                sdp: pc.localDescription.sdp
+            }
+        })
+});
+const renegData = await renegRes.json();
+if (!renegRes.ok) throw new Error(renegData.errorDescription || 'Renegotiation failed');
+            }
+        } catch (e) {
+    console.error('SubscribeTracks Error:', e);
+} finally {
+    isRenegotiating = false;
+}
+    }
+
 function handleRemoteTracksUpdate(msg) {
-    let needsReneg = false;
+    const tracksToSubscribe = [];
     msg.tracks.forEach(t => {
         const key = msg.sessionId + ':' + t.trackName;
         if (!subscribedTracks.has(key)) {
             subscribedTracks.add(key);
-            const transceiver = pc.addTransceiver(t.trackName === 'audio' ? 'audio' : 'video', { direction: 'recvonly' });
-            transceiver._remoteInfo = { sessionId: msg.sessionId, trackName: t.trackName };
-            needsReneg = true;
+            // We don't call addTransceiver here manually anymore? 
+            // Actually, Cloudflare will add them to the offer.
+            // But we need to keep track of the session/track info.
+            tracksToSubscribe.push({ sessionId: msg.sessionId, trackName: t.trackName });
+
+            // Create a placeholder info for the track in our map so pc.ontrack knows what to do
+            // Note: mid will be assigned when the offer arrives.
         }
     });
-    if (needsReneg) renegotiate();
+
+    if (tracksToSubscribe.length > 0) {
+        subscribeTracks(tracksToSubscribe);
+    }
 }
 
 function handleRemoteLeave(msg) {
