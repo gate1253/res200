@@ -631,7 +631,7 @@ function connectWebSocket() {
         
         isRenegotiating = true;
         try {
-            const res = await fetch(apiUrl + `/ calls / sessions / ${ callsSessionId } /tracks/new`, {
+            const res = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}/tracks/new\`, {
                 method: 'POST',
                 body: JSON.stringify({
                     tracks: tracksToSubscribe.map(t => ({
@@ -655,23 +655,23 @@ function connectWebSocket() {
                 await pc.setLocalDescription(answer);
                 
                 // Send answer back via renegotiate
-                const renegRes = await fetch(apiUrl + `/ calls / sessions / ${ callsSessionId }/renegotiate`, {
-    method: 'POST',
-        body: JSON.stringify({
-            sessionDescription: {
-                type: 'answer',
-                sdp: pc.localDescription.sdp
-            }
-        })
-});
-const renegData = await renegRes.json();
-if (!renegRes.ok) throw new Error(renegData.errorDescription || 'Renegotiation failed');
+                const renegRes = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}/renegotiate\`, {
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        sessionDescription: {
+                            type: 'answer',
+                            sdp: pc.localDescription.sdp
+                        }
+                    })
+                });
+                const renegData = await renegRes.json();
+                if (!renegRes.ok) throw new Error(renegData.errorDescription || 'Renegotiation failed');
             }
         } catch (e) {
-    console.error('SubscribeTracks Error:', e);
-} finally {
-    isRenegotiating = false;
-}
+            console.error('SubscribeTracks Error:', e);
+        } finally {
+            isRenegotiating = false;
+        }
     }
 
 function handleRemoteTracksUpdate(msg) {
