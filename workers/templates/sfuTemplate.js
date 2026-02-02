@@ -747,7 +747,7 @@ function handleRemoteLeave(msg) {
             subscribedTracks.delete(key);
         }
     }
-    const containers = document.querySelectorAll(`[id ^= "container-${msg.sessionId}"]`);
+    const containers = document.querySelectorAll(\`[id ^= "container-\${msg.sessionId}"]\`);
     containers.forEach(c => c.remove());
     
     // Stop transceivers related to this session
