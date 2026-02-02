@@ -436,6 +436,7 @@ video {
         if (video) {
             if (video.srcObject !== stream) {
                 video.srcObject = stream;
+                video.play().catch(e => console.error("Video play failed:", e));
                 container.classList.remove('no-video');
             }
         }
@@ -535,12 +536,6 @@ video {
     async function renegotiate() {
         if (!pc || !callsSessionId) return;
         if (isRenegotiating) return;
-        if (pc.signalingState !== 'stable') return;
-
-        isRenegotiating = true;
-        try {
-            const offer = await pc.createOffer();
-        if (pc.signalingState !== 'stable' && pc.localDescription && pc.localDescription.type === 'offer') return;
 
         isRenegotiating = true;
         try {
@@ -551,8 +546,9 @@ video {
                 await pc.setLocalDescription(offer);
                 sessionDescription = pc.localDescription;
             } else {
-                // Already in a state (e.g., have a remote offer), handle it accordingly
-                // In this flow, we assume renegotiate() is called after we want to sync local changes
+                // Already in a state (e.g., have a remote offer)
+                // If we are calling renegotiate manually while not stable, we might be in trouble
+                // but usually we call it after adding a transceiver
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
                 sessionDescription = pc.localDescription;
@@ -583,7 +579,7 @@ video {
             // CRITICAL: Use /tracks/new for OFFERS, /renegotiate for ANSWERS
             const endpoint = sessionDescription.type === 'offer' ? '/tracks/new' : '/renegotiate';
             
-            const res = await fetch(apiUrl + `/ calls / sessions / ${ callsSessionId }${ endpoint } `, {
+            const res = await fetch(apiUrl + \`/calls/sessions/\${callsSessionId}\${endpoint}\`, {
                 method: 'POST',
                 body: JSON.stringify({ 
                     sessionDescription: {
@@ -602,12 +598,7 @@ video {
                 throw new Error(data.errorDescription || 'Renegotiation failed');
             }
     
-            const remoteSdp = data.sdp || (data.sessionDescription ? data.sessionDescription.sdp : null);
-            const remoteType = data.type || (data.sessionDescription ? data.sessionDescription.type : 'answer');
-            
-            await pc.setRemoteDescription(new RTCSessionDescription({ type: remoteType, sdp: remoteSdp }));
-            
-            // Map mids from server response if available
+            // Map mids from server response if available before setRemoteDescription
             if (data.tracks) {
                 data.tracks.forEach(t => {
                     if (t.mid) {
@@ -619,6 +610,11 @@ video {
                     }
                 });
             }
+
+            const remoteSdp = data.sdp || (data.sessionDescription ? data.sessionDescription.sdp : null);
+            const remoteType = data.type || (data.sessionDescription ? data.sessionDescription.type : 'answer');
+            
+            await pc.setRemoteDescription(new RTCSessionDescription({ type: remoteType, sdp: remoteSdp }));
 
             if (ws && ws.readyState === WebSocket.OPEN && localTracksInfo.length > 0) {
                 ws.send(JSON.stringify({ type: 'tracks-update', sessionId: callsSessionId, tracks: localTracksInfo, room: targetCode }));
@@ -665,6 +661,19 @@ function connectWebSocket() {
 
             // Cloudflare often sends an offer in response to tracks/new
             if (data.sessionDescription && data.sessionDescription.type === 'offer') {
+                // IMPORTANT: Map mids before setting remote description so ontrack can find info
+                if (data.tracks) {
+                    data.tracks.forEach(t => {
+                        if (t.mid) {
+                            transceiversMap.set(t.mid, { 
+                                location: t.location || 'remote', 
+                                sessionId: t.sessionId, 
+                                trackName: t.trackName 
+                            });
+                        }
+                    });
+                }
+
                 await pc.setRemoteDescription(new RTCSessionDescription(data.sessionDescription));
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
