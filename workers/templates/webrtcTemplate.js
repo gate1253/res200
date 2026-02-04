@@ -1118,6 +1118,7 @@ async function startTranscription() {
 
     // Connect to Worker
     transcriptWs = new WebSocket('wss://realtime-transcription.gate1253.workers.dev');
+    transcriptWs.binaryType = 'arraybuffer';
     
     transcriptWs.onopen = () => {
         console.log('[Transcription] Connected to Server');
