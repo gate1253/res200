@@ -1040,9 +1040,36 @@ leaveBtn.onclick = () => {
 // --- Transcription Logic ---
 let transcriptWs;
 let audioContext;
-let scriptProcessor;
+let workletNode;
 let isTranscriptionOn = false;
 let audioInputBuffer = [];
+
+const processorCode = `
+    class RecorderProcessor extends AudioWorkletProcessor {
+        constructor() {
+            super();
+            this.bufferSize = 4096;
+            this.buffer = new Float32Array(this.bufferSize);
+            this.bytesWritten = 0;
+        }
+
+        process(inputs, outputs, parameters) {
+            const input = inputs[0];
+            if (input && input.length > 0) {
+                const channelData = input[0];
+                for (let i = 0; i < channelData.length; i++) {
+                    this.buffer[this.bytesWritten++] = channelData[i];
+                    if (this.bytesWritten >= this.bufferSize) {
+                        this.port.postMessage(this.buffer.slice());
+                        this.bytesWritten = 0;
+                    }
+                }
+            }
+            return true;
+        }
+    }
+    registerProcessor('recorder-processor', RecorderProcessor);
+    `;
 
 const toggleCCBtn = document.getElementById('toggleCC');
 const subtitleOverlay = document.getElementById('subtitleOverlay');
@@ -1065,9 +1092,9 @@ function stopTranscription() {
         transcriptWs.close();
         transcriptWs = null;
     }
-    if (scriptProcessor) {
-        scriptProcessor.disconnect();
-        scriptProcessor = null;
+    if (workletNode) {
+        workletNode.disconnect();
+        workletNode = null;
     }
     if (audioContext) {
         audioContext.close();
@@ -1110,44 +1137,44 @@ async function startTranscription() {
 
     // Setup Audio
     const AudioContext = window.AudioContext || window.webkitAudioContext;
-    audioContext = new AudioContext({ sampleRate: 16000 }); // Try to ask for 16k
+    audioContext = new AudioContext({ sampleRate: 16000 });
     const microphone = audioContext.createMediaStreamSource(localStream);
     
-    // Buffer for 4096 samples
-    scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+    // Load AudioWorklet
+    const blob = new Blob([processorCode], { type: 'application/javascript' });
+    await audioContext.audioWorklet.addModule(URL.createObjectURL(blob));
     
-    scriptProcessor.onaudioprocess = (e) => {
+    workletNode = new AudioWorkletNode(audioContext, 'recorder-processor');
+    
+    workletNode.port.onmessage = (e) => {
         if (!isTranscriptionOn || transcriptWs.readyState !== WebSocket.OPEN) return;
         
-        const inputData = e.inputBuffer.getChannelData(0);
-        // Deep copy input data to our buffer
+        const inputData = e.data;
+        // Deep copy input data to our buffer not needed if we just push
         for (let i = 0; i < inputData.length; i++) {
             audioInputBuffer.push(inputData[i]);
         }
 
-        // Send every ~2 seconds (32000 samples at 16k)
-        // If actual sample rate is different, we adjust.
+        // Send every ~2 seconds
         const currentRate = audioContext.sampleRate;
         const targetRate = 16000;
         const requiredSamples = currentRate * 2; 
 
         if (audioInputBuffer.length >= requiredSamples) {
             const rawData = new Float32Array(audioInputBuffer);
-            audioInputBuffer = []; // Clear buffer
+            audioInputBuffer = []; 
 
-            // Downsample if necessary
             let finalData = rawData;
             if (currentRate > targetRate) {
                 finalData = downsampleBuffer(rawData, currentRate, targetRate);
             }
 
-            // Send to worker
             transcriptWs.send(finalData.buffer);
         }
     };
 
-    microphone.connect(scriptProcessor);
-    scriptProcessor.connect(audioContext.destination);
+    microphone.connect(workletNode);
+    workletNode.connect(audioContext.destination);
 }
 
 function downsampleBuffer(buffer, sampleRate, outSampleRate) {
