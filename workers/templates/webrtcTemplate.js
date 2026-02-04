@@ -1168,10 +1168,20 @@ async function startTranscription() {
         const requiredSamples = currentRate * 2; 
 
         if (audioInputBuffer.length >= requiredSamples) {
-            console.log('[Transcription] Encoding buffer to WAV...', audioInputBuffer.length);
             const rawData = new Float32Array(audioInputBuffer);
             audioInputBuffer = []; 
 
+            // Simple VAD: Check if there's enough volume
+            let sum = 0;
+            for (let i = 0; i < rawData.length; i++) sum += rawData[i] * rawData[i];
+            const rms = Math.sqrt(sum / rawData.length);
+            
+            if (rms < 0.005) { // Threshold for silence
+                console.log('[Transcription] Silence detected, skipping send (RMS:', rms.toFixed(5), ')');
+                return;
+            }
+
+            console.log('[Transcription] Encoding buffer to WAV... (RMS:', rms.toFixed(5), ')');
             let finalData = rawData;
             if (currentRate > targetRate) {
                 finalData = downsampleBuffer(rawData, currentRate, targetRate);
