@@ -1144,8 +1144,10 @@ async function startTranscription() {
     const microphone = audioContext.createMediaStreamSource(localStream);
     
     // Load AudioWorklet
+    console.log('[Transcription] Loading AudioWorklet...');
     const blob = new Blob([processorCode], { type: 'application/javascript' });
     await audioContext.audioWorklet.addModule(URL.createObjectURL(blob));
+    console.log('[Transcription] AudioWorklet loaded');
     
     workletNode = new AudioWorkletNode(audioContext, 'recorder-processor');
     
@@ -1153,7 +1155,8 @@ async function startTranscription() {
         if (!isTranscriptionOn || transcriptWs.readyState !== WebSocket.OPEN) return;
         
         const inputData = e.data;
-        // Deep copy input data to our buffer not needed if we just push
+        // console.log('[Transcription] Received chunk from Worklet:', inputData.length);
+        
         for (let i = 0; i < inputData.length; i++) {
             audioInputBuffer.push(inputData[i]);
         }
@@ -1164,6 +1167,7 @@ async function startTranscription() {
         const requiredSamples = currentRate * 2; 
 
         if (audioInputBuffer.length >= requiredSamples) {
+            console.log('[Transcription] Sending buffer to server...', audioInputBuffer.length);
             const rawData = new Float32Array(audioInputBuffer);
             audioInputBuffer = []; 
 
@@ -1173,6 +1177,7 @@ async function startTranscription() {
             }
 
             transcriptWs.send(finalData.buffer);
+            console.log('[Transcription] Data sent');
         }
     };
 
