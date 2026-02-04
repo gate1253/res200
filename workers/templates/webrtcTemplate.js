@@ -324,6 +324,22 @@ video {
 }
 .bg-option:hover { border-color: var(--primary); transform: scale(1.1); }
 .bg-option.active { border-color: var(--primary); box-shadow: 0 0 10px var(--primary-glow); }
+
+#subtitleOverlay {
+    position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%);
+    text-align: center; width: 80%; pointer-events: none; z-index: 150;
+    font-size: 24px; font-weight: 600; color: white;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    display: none;
+    transition: all 0.3s;
+}
+#subtitleOverlay span {
+    background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 8px;
+    box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    line-height: 1.5;
+}
+
+.control-btn.cc { font-weight: 700; font-size: 14px; letter-spacing: -0.5px; }
 .bg-option.none { background: #334155; }
 .bg-option.blur { background: #475569; position: relative; }
 .bg-option.blur::after { content: 'BLUR'; }
@@ -336,12 +352,56 @@ video {
     .control-btn { width: 44px; height: 44px; }
 }
 
+    #lobbyScreen, #waitingScreen {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(15, 23, 42, 0.95);
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        z-index: 2000;
+        transition: opacity 0.5s;
+        display: none;
+        backdrop-filter: blur(20px);
+    }
+    #lobbyScreen.active, #waitingScreen.active { display: flex; }
+    
+    .lobby-content { text-align: center; color: white; animation: fadeIn 1s ease; }
+    .lobby-title { font-size: 3rem; font-weight: 700; margin-bottom: 2rem; background: linear-gradient(to right, #fff, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    
+    #enterBtn {
+        padding: 16px 48px; font-size: 18px; font-weight: 600;
+        background: var(--primary); color: white; border: none; border-radius: 30px;
+        cursor: pointer; box-shadow: 0 0 20px var(--primary-glow);
+        transition: all 0.3s ease;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+    #enterBtn:hover { transform: translateY(-2px); box-shadow: 0 0 40px var(--primary-glow); }
+
+    .waiting-spinner {
+        width: 50px; height: 50px; border: 3px solid rgba(255,255,255,0.3);
+        border-radius: 50%; border-top-color: var(--primary);
+        animation: spin 1s ease-in-out infinite;
+        margin-bottom: 20px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
 </style>
 </head>
 <body>
   <div class="bg-gradient"></div>
   <div class="bg-glow" style="top: 10%; left: 10%;"></div>
   <div class="bg-glow" style="bottom: 10%; right: 10%; animation-delay: -5s;"></div>
+
+  <div id="lobbyScreen">
+    <div class="lobby-content">
+        <div class="lobby-title">WebRTC Premium</div>
+        <button id="enterBtn">입장하기</button>
+    </div>
+  </div>
+
+  <div id="waitingScreen">
+    <div class="waiting-spinner"></div>
+    <h2 style="font-size: 24px; margin-bottom: 10px;">대기중... (인원 초과)</h2>
+    <p style="color: var(--text-muted);">현재 2명이 참여 중입니다. 빈 자리가 생기면 자동으로 입장됩니다.</p>
+  </div>
 
   <div id="header">
     <div id="roomInfo">
@@ -358,6 +418,7 @@ video {
     </div>
   </div>
 
+  <div id="subtitleOverlay"><span></span></div>
   <canvas id="procCanvas"></canvas>
 
   <div id="bgMenu">
@@ -378,6 +439,7 @@ video {
     <button id="toggleVideo" class="control-btn" title="Toggle Camera">
         <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
     </button>
+    <button id="toggleCC" class="control-btn cc" title="Live Caption (Beta)">CC</button>
     <button id="toggleScreen" class="control-btn" title="Share Screen">
         <svg viewBox="0 0 24 24"><path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/></svg>
     </button>
@@ -414,6 +476,7 @@ video {
     let screenStream; // Original screen stream
     let processedStream; // Stream from canvas (blurred/bg)
     let activeStreamType = 'camera'; // 'camera', 'screen', 'canvas'
+    let isAdmitted = false;
 
     let ws;
 	const peerConnections = {}; // clientId: RTCPeerConnection (Main)
@@ -587,6 +650,23 @@ function connectWebSocket() {
             const msg = JSON.parse(event.data);
             if (msg.type === 'user-count') {
                 userCountBadge.textContent = msg.count + ' Participants';
+                
+                // Limit Logic: Max 2
+                if (!isAdmitted) {
+                    if (msg.count <= 2) {
+                        isAdmitted = true;
+                        document.getElementById('waitingScreen').classList.remove('active');
+                        // Restore tracks
+                        if (localStream) localStream.getTracks().forEach(t => t.enabled = true);
+                    } else {
+                        document.getElementById('waitingScreen').classList.add('active');
+                        // Silence tracks
+                        if (localStream) localStream.getTracks().forEach(t => t.enabled = false);
+                    }
+                } else {
+                     // Check if I should be booted? (Optional, but safe to keep checking)
+                     // If I am admitted, I stay admitted unless logic changes.
+                }
                 return;
             }
             if (msg.clientId !== clientId && msg.clientId !== screenClientId) {
@@ -954,6 +1034,157 @@ leaveBtn.onclick = () => {
                 '</div>';
     }
 };
+
+
+
+// --- Transcription Logic ---
+let transcriptWs;
+let audioContext;
+let scriptProcessor;
+let isTranscriptionOn = false;
+let audioInputBuffer = [];
+
+const toggleCCBtn = document.getElementById('toggleCC');
+const subtitleOverlay = document.getElementById('subtitleOverlay');
+const subtitleText = subtitleOverlay.querySelector('span');
+
+toggleCCBtn.onclick = () => {
+    isTranscriptionOn = !isTranscriptionOn;
+    toggleCCBtn.classList.toggle('active', isTranscriptionOn);
+    subtitleOverlay.style.display = isTranscriptionOn ? 'block' : 'none';
+    
+    if (isTranscriptionOn) {
+        startTranscription();
+    } else {
+        stopTranscription();
+    }
+};
+
+function stopTranscription() {
+    if (transcriptWs) {
+        transcriptWs.close();
+        transcriptWs = null;
+    }
+    if (scriptProcessor) {
+        scriptProcessor.disconnect();
+        scriptProcessor = null;
+    }
+    if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+    }
+    subtitleText.textContent = '';
+}
+
+async function startTranscription() {
+    if (!localStream) {
+        alert('카메라/마이크 권한이 필요합니다.');
+        // Revert UI
+        isTranscriptionOn = false;
+        toggleCCBtn.classList.remove('active');
+        subtitleOverlay.style.display = 'none';
+        return;
+    }
+
+    // Connect to Worker
+    transcriptWs = new WebSocket('wss://realtime-transcription.gate1253.workers.dev');
+    
+    transcriptWs.onopen = () => {
+        console.log('[Transcription] Connected to Server');
+        subtitleText.textContent = 'Listening...';
+    };
+    
+    transcriptWs.onerror = (e) => {
+        console.error('[Transcription] Connection Error', e);
+        subtitleText.textContent = 'Server Error (Check localhost:8787)';
+    };
+
+    transcriptWs.onmessage = (e) => {
+        try {
+            const data = JSON.parse(e.data);
+            if (data.text) {
+                showSubtitle(data.text);
+            }
+        } catch (err) { }
+    };
+
+    // Setup Audio
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    audioContext = new AudioContext({ sampleRate: 16000 }); // Try to ask for 16k
+    const microphone = audioContext.createMediaStreamSource(localStream);
+    
+    // Buffer for 4096 samples
+    scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+    
+    scriptProcessor.onaudioprocess = (e) => {
+        if (!isTranscriptionOn || transcriptWs.readyState !== WebSocket.OPEN) return;
+        
+        const inputData = e.inputBuffer.getChannelData(0);
+        // Deep copy input data to our buffer
+        for (let i = 0; i < inputData.length; i++) {
+            audioInputBuffer.push(inputData[i]);
+        }
+
+        // Send every ~2 seconds (32000 samples at 16k)
+        // If actual sample rate is different, we adjust.
+        const currentRate = audioContext.sampleRate;
+        const targetRate = 16000;
+        const requiredSamples = currentRate * 2; 
+
+        if (audioInputBuffer.length >= requiredSamples) {
+            const rawData = new Float32Array(audioInputBuffer);
+            audioInputBuffer = []; // Clear buffer
+
+            // Downsample if necessary
+            let finalData = rawData;
+            if (currentRate > targetRate) {
+                finalData = downsampleBuffer(rawData, currentRate, targetRate);
+            }
+
+            // Send to worker
+            transcriptWs.send(finalData.buffer);
+        }
+    };
+
+    microphone.connect(scriptProcessor);
+    scriptProcessor.connect(audioContext.destination);
+}
+
+function downsampleBuffer(buffer, sampleRate, outSampleRate) {
+    if (outSampleRate === sampleRate) return buffer;
+    if (outSampleRate > sampleRate) return buffer; // Upsampling not supported here
+    
+    const sampleRateRatio = sampleRate / outSampleRate;
+    const newLength = Math.round(buffer.length / sampleRateRatio);
+    const result = new Float32Array(newLength);
+    
+    let offsetResult = 0;
+    let offsetBuffer = 0;
+    
+    while (offsetResult < result.length) {
+        const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+        let accum = 0, count = 0;
+        for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+            accum += buffer[i];
+            count++;
+        }
+        result[offsetResult] = count > 0 ? accum / count : 0;
+        offsetResult++;
+        offsetBuffer = nextOffsetBuffer;
+    }
+    return result;
+}
+
+let subTimeout;
+function showSubtitle(text) {
+    subtitleText.textContent = text;
+    subtitleOverlay.style.opacity = '1';
+    
+    clearTimeout(subTimeout);
+    subTimeout = setTimeout(() => {
+        subtitleOverlay.style.opacity = '0';
+    }, 5000);
+}
 
 window.onload = start;
   </script >
