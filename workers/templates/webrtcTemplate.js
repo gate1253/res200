@@ -998,6 +998,9 @@ document.querySelectorAll('.bg-option').forEach(opt => {
                 processedStream = procCanvas.captureStream(30);
                 replaceVideoTrack(processedStream);
             }
+        }
+    };
+});
 
 
 colorPickerBtn.onclick = (e) => {
