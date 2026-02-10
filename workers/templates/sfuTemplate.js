@@ -372,6 +372,8 @@ video {
     let isVideoOn = true;
     let currentBgMode = 'none';
     let currentBgValue = '';
+    let isProcessingBg = false;
+    let bgSourceVideo = null;
     const bgImageObj = new Image();
     bgImageObj.crossOrigin = "anonymous";
     
@@ -465,17 +467,36 @@ video {
 
     async function processBg() {
         if (!cameraStream) return;
+        
+        if (!bgSourceVideo) {
+            bgSourceVideo = document.createElement('video');
+            bgSourceVideo.muted = true;
+            bgSourceVideo.playsInline = true;
+        }
+
+        if (bgSourceVideo.srcObject !== cameraStream) {
+            bgSourceVideo.srcObject = cameraStream;
+            await bgSourceVideo.play();
+        }
+
+        if (isProcessingBg) return;
+        isProcessingBg = true;
+        
         initSelfieSegmentation();
-        const videoElem = document.createElement('video');
-        videoElem.srcObject = cameraStream;
-        videoElem.muted = true; // Fix local echo
-        await videoElem.play();
-        procCanvas.width = videoElem.videoWidth; 
-        procCanvas.height = videoElem.videoHeight;
+
         const sendToMediaPipe = async () => {
-            if (currentBgMode === 'none') return;
-            await selfieSegmentation.send({ image: videoElem });
-            requestAnimationFrame(sendToMediaPipe);
+            if (currentBgMode === 'none') {
+                isProcessingBg = false;
+                return;
+            }
+            try {
+                await selfieSegmentation.send({ image: bgSourceVideo });
+            } catch (e) {
+                console.error("[SFU] MediaPipe error:", e);
+            }
+            if (isProcessingBg) {
+                requestAnimationFrame(sendToMediaPipe);
+            }
         };
         sendToMediaPipe();
     }
@@ -854,14 +875,18 @@ document.querySelectorAll('.bg-option').forEach(opt => {
         opt.classList.add('active');
         const type = opt.dataset.type;
         const value = opt.dataset.value;
+        
         if (type === 'none') {
             currentBgMode = 'none';
+            activeStreamType = 'camera';
             replaceVideoTrack(cameraStream.getVideoTracks()[0]);
         } else {
             currentBgMode = type;
             currentBgValue = value;
             if (type === 'image') bgImageObj.src = value;
+            
             await processBg();
+            
             if (activeStreamType !== 'canvas') {
                 activeStreamType = 'canvas';
                 processedStream = procCanvas.captureStream(30);
