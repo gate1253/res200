@@ -437,20 +437,28 @@ video {
         const videoId = 'video-' + info.sessionId + (info.trackName === 'screen' ? '-screen' : '');
         const video = document.getElementById(videoId);
         if (video) {
-            let stream = remoteStreams.get(info.sessionId + (info.trackName === 'screen' ? '-screen' : ''));
+            const streamId = info.sessionId + (info.trackName === 'screen' ? '-screen' : '');
+            let stream = remoteStreams.get(streamId);
             if (!stream) {
                 stream = new MediaStream();
-                remoteStreams.set(info.sessionId + (info.trackName === 'screen' ? '-screen' : ''), stream);
+                remoteStreams.set(streamId, stream);
             }
             
-            if (!stream.getTracks().includes(track)) {
+            // Check if track is already in stream by ID to avoid duplicates
+            if (!stream.getTracks().some(t => t.id === track.id)) {
+                console.info('[SFU] Adding track to stream:', info.trackName, track.id);
                 stream.addTrack(track);
             }
 
             if (video.srcObject !== stream) {
                 video.srcObject = stream;
-                video.play().catch(e => console.error("[SFU] Video play failed:", e));
             }
+            
+            // Always try to play if it's not already playing or to ensure new tracks are rendered
+            video.play().catch(e => {
+                if (e.name !== 'AbortError') console.error("[SFU] Video play failed:", e);
+            });
+            
             container.classList.remove('no-video');
         }
     }
@@ -757,10 +765,36 @@ function handleRemoteLeave(msg) {
 
 function removeRemoteTrackUI(sid, trackName) {
     console.info('[SFU] removeRemoteTrackUI:', sid, trackName);
-    let id = 'container-' + sid;
-    if (trackName === 'screen') id += '-screen';
-    const el = document.getElementById(id);
-    if (el) el.remove();
+    const streamId = sid + (trackName === 'screen' ? '-screen' : '');
+    const stream = remoteStreams.get(streamId);
+    
+    if (stream) {
+        const kind = (trackName === 'audio') ? 'audio' : 'video';
+        stream.getTracks().forEach(t => {
+            if (t.kind === kind) {
+                console.info('[SFU] Stopping and removing track:', kind, t.id);
+                t.stop();
+                stream.removeTrack(t);
+            }
+        });
+    }
+
+    // Only remove the container if NO tracks remain for this participant/type
+    let hasOtherTracks = false;
+    if (trackName === 'screen') {
+        hasOtherTracks = subscribedTracks.has(sid + ':screen');
+    } else {
+        hasOtherTracks = subscribedTracks.has(sid + ':video') || subscribedTracks.has(sid + ':audio');
+    }
+
+    if (!hasOtherTracks) {
+        console.info('[SFU] Removing container as no tracks remain:', streamId);
+        let id = 'container-' + sid;
+        if (trackName === 'screen') id += '-screen';
+        const el = document.getElementById(id);
+        if (el) el.remove();
+        remoteStreams.delete(streamId);
+    }
     
     pc.getTransceivers().forEach(t => {
         const mapped = transceiversMap.get(t.mid);
@@ -769,8 +803,6 @@ function removeRemoteTrackUI(sid, trackName) {
             transceiversMap.delete(t.mid);
         }
     });
-    const streamId = sid + (trackName === 'screen' ? '-screen' : '');
-    remoteStreams.delete(streamId);
 }
 
 toggleMicBtn.onclick = () => {
