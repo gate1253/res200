@@ -468,6 +468,7 @@ video {
         initSelfieSegmentation();
         const videoElem = document.createElement('video');
         videoElem.srcObject = cameraStream;
+        videoElem.muted = true; // Fix local echo
         await videoElem.play();
         procCanvas.width = videoElem.videoWidth; 
         procCanvas.height = videoElem.videoHeight;
@@ -871,10 +872,10 @@ document.querySelectorAll('.bg-option').forEach(opt => {
 });
 
 function replaceVideoTrack(newTrack) {
-    pc.getSenders().forEach(s => {
-        const t = s.track;
-        if (t && t.kind === 'video') {
-            s.replaceTrack(newTrack);
+    pc.getTransceivers().forEach(t => {
+        const info = transceiversMap.get(t.mid);
+        if (info && info.location === 'local' && info.trackName === 'video') {
+            t.sender.replaceTrack(newTrack);
         }
     });
     localVideo.srcObject = new MediaStream([newTrack]);
