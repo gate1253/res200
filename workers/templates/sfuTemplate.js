@@ -320,10 +320,10 @@ video {
   </div>
 
   <div id="controls">
-    <button id="toggleMic" class="control-btn" title="Toggle Microphone">
+    <button id="toggleMic" class="control-btn active" title="Toggle Microphone">
         <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
     </button>
-    <button id="toggleVideo" class="control-btn" title="Toggle Camera">
+    <button id="toggleVideo" class="control-btn active" title="Toggle Camera">
         <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
     </button>
     <button id="toggleScreen" class="control-btn" title="Share Screen">
@@ -808,12 +808,14 @@ function removeRemoteTrackUI(sid, trackName) {
 toggleMicBtn.onclick = () => {
     isMicOn = !isMicOn;
     localStream.getAudioTracks().forEach(t => t.enabled = isMicOn);
+    toggleMicBtn.classList.toggle('active', isMicOn);
     toggleMicBtn.classList.toggle('off', !isMicOn);
 };
 
 toggleVideoBtn.onclick = () => {
     isVideoOn = !isVideoOn;
     if (cameraStream) cameraStream.getVideoTracks().forEach(t => t.enabled = isVideoOn);
+    toggleVideoBtn.classList.toggle('active', isVideoOn);
     toggleVideoBtn.classList.toggle('off', !isVideoOn);
     document.getElementById('localVideoContainer').classList.toggle('no-video', !isVideoOn);
 };
