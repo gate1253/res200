@@ -377,6 +377,7 @@ video {
     
     const subscribedTracks = new Set();
     const transceiversMap = new Map();
+    const remoteStreams = new Map(); // sessionId -> MediaStream
     let pendingRemoteTracks = [];
     
     // Init Selfie Segmentation
@@ -423,7 +424,7 @@ video {
         ctx.restore();
     }
     
-    function setupRemoteVideo(info, stream) {
+    function setupRemoteVideo(info, track) {
         console.info('[SFU] setupRemoteVideo:', info.sessionId, info.trackName);
         let containerId = 'container-' + info.sessionId;
         if (info.trackName === 'screen') containerId += '-screen';
@@ -436,11 +437,21 @@ video {
         const videoId = 'video-' + info.sessionId + (info.trackName === 'screen' ? '-screen' : '');
         const video = document.getElementById(videoId);
         if (video) {
+            let stream = remoteStreams.get(info.sessionId + (info.trackName === 'screen' ? '-screen' : ''));
+            if (!stream) {
+                stream = new MediaStream();
+                remoteStreams.set(info.sessionId + (info.trackName === 'screen' ? '-screen' : ''), stream);
+            }
+            
+            if (!stream.getTracks().includes(track)) {
+                stream.addTrack(track);
+            }
+
             if (video.srcObject !== stream) {
                 video.srcObject = stream;
                 video.play().catch(e => console.error("[SFU] Video play failed:", e));
-                container.classList.remove('no-video');
             }
+            container.classList.remove('no-video');
         }
     }
 
@@ -486,7 +497,7 @@ video {
                 const info = transceiversMap.get(mid);
                 console.info('[SFU] pc.ontrack:', mid, info, event.track.kind);
                 if (info && info.location === 'remote') {
-                    setupRemoteVideo(info, event.streams[0]);
+                    setupRemoteVideo(info, event.track);
                 }
             };
             
@@ -740,6 +751,8 @@ function handleRemoteLeave(msg) {
             transceiversMap.delete(t.mid);
         }
     });
+    remoteStreams.delete(sid);
+    remoteStreams.delete(sid + '-screen');
 }
 
 function removeRemoteTrackUI(sid, trackName) {
@@ -756,6 +769,8 @@ function removeRemoteTrackUI(sid, trackName) {
             transceiversMap.delete(t.mid);
         }
     });
+    const streamId = sid + (trackName === 'screen' ? '-screen' : '');
+    remoteStreams.delete(streamId);
 }
 
 toggleMicBtn.onclick = () => {
