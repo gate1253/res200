@@ -146,10 +146,25 @@ export async function handleRequest(request, env) {
 					}
 				}
 
-				// Redirect / Count logic
+				// Redirect / Count logic / QueryString Forwarding
 				let finalTarget = target;
 				try {
 					const targetUrl = new URL(target);
+
+					// 1. QueryString Forwarding check
+					if (targetUrl.searchParams.get('with') === 'querystring' && targetUrl.searchParams.get('type') === 'forward') {
+						// Remove markers
+						targetUrl.searchParams.delete('with');
+						targetUrl.searchParams.delete('type');
+
+						// Append calling query strings
+						for (const [key, value] of url.searchParams.entries()) {
+							targetUrl.searchParams.set(key, value);
+						}
+						finalTarget = targetUrl.toString();
+					}
+
+					// 2. Count increment logic
 					if (targetUrl.searchParams.get('cnt') === '${cnt}' && env.REQ_COUNT_KV) {
 						let count = await env.REQ_COUNT_KV.get(targetCode);
 						count = count ? parseInt(count, 10) : 0;
@@ -160,7 +175,7 @@ export async function handleRequest(request, env) {
 					}
 				} catch (e) {
 					// target might not be a valid URL, just redirect to whatever it is if possible
-					console.warn('Invalid target URL for count increment:', target);
+					console.warn('Invalid target URL for logic processing:', target);
 				}
 
 				return new Response(null, { status: 302, headers: Object.assign({ Location: finalTarget }, corsHeaders()) });
