@@ -33,6 +33,11 @@ const definedPaths = [
 	'/css/fonts/wecandeoIcon..svg',
 	'/css/fonts/wecandeoIcon..ttf',
 	'/css/fonts/wecandeoIcon..woff',
+	'/js/sfu/MediaManager.js',
+	'/js/sfu/SignalingClient.js',
+	'/js/sfu/WebRTCManager.js',
+	'/js/sfu/UIManager.js',
+	'/js/sfu/SFUApp.js'
 ];
 
 export async function handleRequest(request, env) {
