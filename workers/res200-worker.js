@@ -37,7 +37,13 @@ const definedPaths = [
 	'/js/sfu/SignalingClient.js',
 	'/js/sfu/WebRTCManager.js',
 	'/js/sfu/UIManager.js',
-	'/js/sfu/SFUApp.js'
+	'/js/sfu/SFUApp.js',
+	'/js/webrtc/MediaManager.js',
+	'/js/webrtc/PeerManager.js',
+	'/js/webrtc/SignalingClient.js',
+	'/js/webrtc/TranscriptionManager.js',
+	'/js/webrtc/UIManager.js',
+	'/js/webrtc/WebRTCApp.js'
 ];
 
 export async function handleRequest(request, env) {
