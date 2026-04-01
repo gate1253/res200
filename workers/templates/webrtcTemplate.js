@@ -473,9 +473,7 @@ video {
 
   <div id="langMenu">
     <div class="lang-option active" data-lang="auto">Auto Detect</div>
-    <div class="lang-option" data-lang="ko">한국어</div>
     <div class="lang-option" data-lang="en">English</div>
-    <div class="lang-option" data-lang="ja">日本語</div>
   </div>
 
   <div id="controls">
