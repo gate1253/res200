@@ -297,6 +297,7 @@ video {
         <div id="status"><span class="dot warning"></span><span>Initializing...</span></div>
     </div>
     <div id="userCount">0 Participants</div>
+    <div id="version" style="font-size:11px;color:var(--text-muted);opacity:0.6;">v1.0.0</div>
   </div>
 
   <div id="videoGrid">
