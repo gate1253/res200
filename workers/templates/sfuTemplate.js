@@ -79,16 +79,17 @@ body {
 
 #videoGrid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: 1fr;
     grid-auto-rows: 1fr;
-    gap: 20px;
-    padding: 100px 30px 120px;
+    gap: 12px;
+    padding: 80px 20px 110px;
     width: 100vw;
     height: 100vh;
     box-sizing: border-box;
-    align-items: center;
-    justify-items: center;
-    transition: all 0.5s ease;
+    align-items: stretch;
+    justify-items: stretch;
+    transition: grid-template-columns 0.4s ease;
+    overflow: hidden;
 }
 
 .video-container {
