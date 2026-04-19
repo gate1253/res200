@@ -67,7 +67,7 @@ export async function handleRequest(request, env) {
 
 
 	// GET /{uniqueUserId}/{alias} 패턴만 처리
-	if (request.method === 'GET' && pathname.length > 1) {
+	if (pathname.length > 1) {
 		const fullPath = pathname.slice(1); // 예: "user123abcde/my/custom/code"
 		const pathSegments = fullPath.split('/');
 		let targetCode = null; // KV에서 조회할 최종 키
@@ -85,6 +85,70 @@ export async function handleRequest(request, env) {
 		if (targetCode) {
 			const target = env.RES302_KV ? await env.RES302_KV.get(targetCode) : null;
 			if (target) {
+
+				// 0. Expiration Check
+				if (env.REQ_TIME_KV) {
+					const expirationTimestamp = await env.REQ_TIME_KV.get(targetCode);
+					if (expirationTimestamp) {
+						const expirationTime = parseInt(expirationTimestamp, 10);
+						if (Date.now() > expirationTime) {
+							return new Response('Forbidden: This link has expired.', { status: 403, headers: corsHeaders() });
+						}
+					}
+				}
+
+				let finalTarget = target;
+				let isForwardingEnabled = false;
+				try {
+					const targetUrl = new URL(target);
+
+					// 1. QueryString Forwarding check
+					isForwardingEnabled =
+						(targetUrl.searchParams.get('with') === 'querystring' && targetUrl.searchParams.get('type') === 'forward') ||
+						(url.searchParams.get('with') === 'querystring' && url.searchParams.get('type') === 'forward');
+
+					if (isForwardingEnabled) {
+						// Append calling query strings, avoiding duplication of the forwarding triggers
+						for (const [key, value] of url.searchParams.entries()) {
+							// If the target already has these specific triggers, don't re-add them from the request URL
+							if ((key === 'with' && value === 'querystring') || (key === 'type' && value === 'forward')) {
+								if (targetUrl.searchParams.get(key) === value) continue;
+							}
+							targetUrl.searchParams.set(key, value);
+						}
+
+						// Count increment logic for forwarding
+						if (targetUrl.searchParams.get('cnt') === '${cnt}' && env.REQ_COUNT_KV) {
+							let count = await env.REQ_COUNT_KV.get(targetCode);
+							count = count ? parseInt(count, 10) : 0;
+							const newCount = count + 1;
+							await env.REQ_COUNT_KV.put(targetCode, newCount.toString());
+							targetUrl.searchParams.set('cnt', newCount);
+						}
+						finalTarget = targetUrl.toString();
+
+						// == Proxy Forwarding (Headers & Body) ==
+						const proxyRequest = new Request(finalTarget, request);
+						return await fetch(proxyRequest);
+					}
+
+					// 2. Count increment logic for non-forwarding (302)
+					if (targetUrl.searchParams.get('cnt') === '${cnt}' && env.REQ_COUNT_KV) {
+						let count = await env.REQ_COUNT_KV.get(targetCode);
+						count = count ? parseInt(count, 10) : 0;
+						const newCount = count + 1;
+						await env.REQ_COUNT_KV.put(targetCode, newCount.toString());
+						targetUrl.searchParams.set('cnt', newCount);
+						finalTarget = targetUrl.toString();
+					}
+				} catch (e) {
+					console.warn('Invalid target URL for logic processing:', target);
+				}
+
+				// If it's not forwarding, only GET is allowed for templates and standard redirects
+				if (request.method !== 'GET') {
+					return new Response('Method Not Allowed', { status: 405, headers: corsHeaders() });
+				}
 
 				// 1. Player
 				if (url.searchParams.get('with') === 'player' && url.searchParams.get('type') === 'html') {
@@ -144,53 +208,6 @@ export async function handleRequest(request, env) {
 					const webrtcApiUrl = env.WEBRTC_API_URL || 'https://webrtc.gate1253.workers.dev';
 					const html = getSfuHtml(wsTarget, targetCode, webrtcApiUrl);
 					return new Response(html, { status: 200, headers: Object.assign({ 'Content-Type': 'text/html;charset=UTF-8' }, corsHeaders()) });
-				}
-
-				// Expiration Check
-				if (env.REQ_TIME_KV) {
-					const expirationTimestamp = await env.REQ_TIME_KV.get(targetCode);
-					if (expirationTimestamp) {
-						const expirationTime = parseInt(expirationTimestamp, 10);
-						if (Date.now() > expirationTime) {
-							return new Response('Forbidden: This link has expired.', { status: 403, headers: corsHeaders() });
-						}
-					}
-				}
-
-				// Redirect / Count logic / QueryString Forwarding
-				let finalTarget = target;
-				try {
-					const targetUrl = new URL(target);
-
-					// 1. QueryString Forwarding check
-					const isForwardingEnabled =
-						(targetUrl.searchParams.get('with') === 'querystring' && targetUrl.searchParams.get('type') === 'forward') ||
-						(url.searchParams.get('with') === 'querystring' && url.searchParams.get('type') === 'forward');
-
-					if (isForwardingEnabled) {
-						// Append calling query strings, avoiding duplication of the forwarding triggers
-						for (const [key, value] of url.searchParams.entries()) {
-							// If the target already has these specific triggers, don't re-add them from the request URL
-							if ((key === 'with' && value === 'querystring') || (key === 'type' && value === 'forward')) {
-								if (targetUrl.searchParams.get(key) === value) continue;
-							}
-							targetUrl.searchParams.set(key, value);
-						}
-						finalTarget = targetUrl.toString();
-					}
-
-					// 2. Count increment logic
-					if (targetUrl.searchParams.get('cnt') === '${cnt}' && env.REQ_COUNT_KV) {
-						let count = await env.REQ_COUNT_KV.get(targetCode);
-						count = count ? parseInt(count, 10) : 0;
-						const newCount = count + 1;
-						await env.REQ_COUNT_KV.put(targetCode, newCount.toString());
-						targetUrl.searchParams.set('cnt', newCount);
-						finalTarget = targetUrl.toString();
-					}
-				} catch (e) {
-					// target might not be a valid URL, just redirect to whatever it is if possible
-					console.warn('Invalid target URL for logic processing:', target);
 				}
 
 				return new Response(null, { status: 302, headers: Object.assign({ Location: finalTarget }, corsHeaders()) });
