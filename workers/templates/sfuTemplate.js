@@ -472,7 +472,7 @@ body.lobby-mode #videoGrid { display: none; }
             <div id="status"><span class="dot warning"></span><span>Initializing...</span></div>
         </div>
         <div id="userCount">0 Participants</div>
-        <div id="version" style="font-size:11px;color:var(--text-muted);opacity:0.6;">v2.1.0</div>
+        <div id="version" style="font-size:11px;color:var(--text-muted);opacity:0.6;">v2.1.1</div>
     </div>
 
     <div id="videoGrid">
