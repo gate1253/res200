@@ -1,7 +1,7 @@
 
 export function getSfuHtml(target, targetCode, apiUrl) {
     return `
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -27,10 +27,10 @@ export function getSfuHtml(target, targetCode, apiUrl) {
     --danger: #ef4444;
 }
 
-body { 
-    margin: 0; padding: 0; background-color: var(--bg); color: var(--text); 
+body {
+    margin: 0; padding: 0; background-color: var(--bg); color: var(--text);
     font-family: 'Outfit', sans-serif;
-    overflow: hidden; 
+    overflow: hidden;
 }
 
 .bg-gradient {
@@ -50,6 +50,135 @@ body {
     0% { transform: translate(-10%, -10%) scale(1); opacity: 0.3; }
     100% { transform: translate(20%, 20%) scale(1.2); opacity: 0.6; }
 }
+
+/* ── Lobby ─────────────────────────────────────────────── */
+
+#lobby {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 500;
+    background: var(--bg);
+}
+
+#lobby .lobby-card {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 24px;
+    background: var(--card-bg);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(20px);
+    border-radius: 28px;
+    padding: 40px 48px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+    max-width: 440px; width: 90%;
+}
+
+#lobby .lobby-title {
+    font-size: 26px; font-weight: 600;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #e0e7ff, #a5b4fc);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+
+#lobby .lobby-preview {
+    position: relative;
+    width: 320px; height: 240px;
+    background: #1e293b;
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1px solid var(--glass-border);
+}
+
+#lobbyVideo {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+}
+
+#lobby .lobby-preview.no-video #lobbyVideo { opacity: 0; }
+#lobby .lobby-preview.no-video::before {
+    content: 'Camera Off';
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--text-muted); font-size: 16px; font-weight: 500;
+}
+#lobby .lobby-preview[data-error]:not([data-error=""])::before {
+    content: attr(data-error);
+    color: var(--danger);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 0 16px;
+    text-align: center;
+}
+
+#lobbyBgMenu {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    justify-content: center; width: 100%;
+}
+
+#lobbyBgMenu .bg-option {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 0.2s;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px; font-weight: 600;
+    color: white;
+}
+#lobbyBgMenu .bg-option:hover { border-color: var(--primary); transform: scale(1.1); }
+#lobbyBgMenu .bg-option.active { border-color: var(--primary); box-shadow: 0 0 10px var(--primary-glow); }
+#lobbyBgMenu .bg-option.none { background: #334155; }
+#lobbyBgMenu .bg-option.blur { background: #475569; }
+#lobbyBgMenu .bg-option.blur::after { content: 'BLUR'; }
+
+.lobby-controls {
+    display: flex; gap: 10px;
+}
+
+.lobby-controls .control-btn {
+    width: 44px; height: 44px;
+    border-radius: 14px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+.lobby-controls .control-btn:hover { background: var(--primary); transform: translateY(-2px); }
+.lobby-controls .control-btn.active { background: var(--primary); }
+.lobby-controls .control-btn.off { background: rgba(239,68,68,0.2); color: var(--danger); border-color: rgba(239,68,68,0.3); }
+.lobby-controls .control-btn svg { width: 22px; height: 22px; fill: currentColor; }
+
+#joinBtn {
+    width: 100%;
+    padding: 14px 32px;
+    font-size: 17px; font-weight: 600;
+    font-family: 'Outfit', sans-serif;
+    background: linear-gradient(135deg, #4f46e5, #6366f1);
+    color: white;
+    border: none;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.25s;
+    box-shadow: 0 8px 24px var(--primary-glow);
+    letter-spacing: 0.3px;
+}
+#joinBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px var(--primary-glow);
+}
+#joinBtn:active { transform: translateY(0); }
+
+/* ── Header ───────────────────────────────────────────── */
 
 #header {
     position: fixed; top: 0; left: 0; width: 100%;
@@ -76,6 +205,8 @@ body {
     font-size: 14px;
     font-weight: 500;
 }
+
+/* ── Video Grid ───────────────────────────────────────── */
 
 #videoGrid {
     display: grid;
@@ -168,6 +299,8 @@ video {
     box-shadow: 0 0 30px var(--primary-glow);
 }
 
+/* ── Controls ─────────────────────────────────────────── */
+
 #controls {
     position: fixed;
     bottom: 40px;
@@ -202,8 +335,8 @@ video {
     border: 1px solid var(--glass-border);
 }
 
-.control-btn:hover { 
-    background: var(--primary); 
+.control-btn:hover {
+    background: var(--primary);
     transform: translateY(-5px);
     box-shadow: 0 10px 20px var(--primary-glow);
     border-color: rgba(255,255,255,0.2);
@@ -214,8 +347,8 @@ video {
     border-color: var(--primary-glow);
 }
 
-.control-btn.off { 
-    background: rgba(239, 68, 68, 0.2); 
+.control-btn.off {
+    background: rgba(239, 68, 68, 0.2);
     color: var(--danger);
     border-color: rgba(239, 68, 68, 0.3);
 }
@@ -285,6 +418,15 @@ video {
 .bg-option.color-picker { background: linear-gradient(45deg, red, blue); }
 #bgColorInput { display: none; }
 #procCanvas { display: none; }
+
+/* ── Meeting view hidden by default ───────────────────── */
+#meetingView { display: none; }
+#meetingView.active { display: contents; }
+
+body.lobby-mode #controls,
+body.lobby-mode #header,
+body.lobby-mode #videoGrid { display: none; }
+
 </style>
 </head>
 <body>
@@ -292,52 +434,87 @@ video {
   <div class="bg-glow" style="top: 10%; left: 10%;"></div>
   <div class="bg-glow" style="bottom: 10%; right: 10%; animation-delay: -5s;"></div>
 
-  <div id="header">
-    <div id="roomInfo">
-        <div id="roomTitle">⚡ SFU Premium Session</div>
-        <div id="status"><span class="dot warning"></span><span>Initializing...</span></div>
+  <!-- ── Lobby ────────────────────────────────────────── -->
+  <div id="lobby">
+    <div class="lobby-card">
+        <div class="lobby-title">SFU Premium Session</div>
+        <div class="lobby-preview" id="lobbyPreview">
+            <video id="lobbyVideo" autoplay playsinline muted></video>
+        </div>
+
+        <div class="lobby-controls">
+            <button id="lobbyMicBtn" class="control-btn active" title="Toggle Microphone">
+                <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+            </button>
+            <button id="lobbyVideoBtn" class="control-btn active" title="Toggle Camera">
+                <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+            </button>
+        </div>
+
+        <div id="lobbyBgMenu">
+            <div class="bg-option none active" data-type="none" title="No Filter">None</div>
+            <div class="bg-option blur" data-type="blur" title="Blur Background"></div>
+            <div class="bg-option" data-type="color" data-value="#00ff00" style="background:#00ff00;" title="Green Screen"></div>
+            <div class="bg-option" data-type="color" data-value="#000000" style="background:#000000;" title="Black"></div>
+            <div class="bg-option" data-type="image" data-value="https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=400&q=80" style="background-image:url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=100&q=80')" title="Office"></div>
+            <div class="bg-option" data-type="image" data-value="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=400&q=80" style="background-image:url('https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=100&q=80')" title="Mountains"></div>
+        </div>
+
+        <button id="joinBtn">Join Meeting</button>
     </div>
-    <div id="userCount">0 Participants</div>
-    <div id="version" style="font-size:11px;color:var(--text-muted);opacity:0.6;">v1.1.0</div>
   </div>
 
-  <div id="videoGrid">
-    <div id="localVideoContainer" class="video-container" data-initials="ME">
-        <video id="localVideo" autoplay playsinline muted></video>
-        <div class="label">You (Host)</div>
+  <!-- ── Meeting View ─────────────────────────────────── -->
+  <div id="meetingView">
+    <div id="header">
+        <div id="roomInfo">
+            <div id="roomTitle">SFU Premium Session</div>
+            <div id="status"><span class="dot warning"></span><span>Initializing...</span></div>
+        </div>
+        <div id="userCount">0 Participants</div>
+        <div id="version" style="font-size:11px;color:var(--text-muted);opacity:0.6;">v2.1.0</div>
+    </div>
+
+    <div id="videoGrid">
+        <div id="localVideoContainer" class="video-container" data-initials="ME">
+            <video id="localVideo" autoplay playsinline muted></video>
+            <div class="label">You</div>
+        </div>
+    </div>
+
+    <canvas id="procCanvas"></canvas>
+
+    <div id="bgMenu">
+        <div class="bg-option none active" data-type="none" title="No Filter">None</div>
+        <div class="bg-option blur" data-type="blur" title="Blur Background"></div>
+        <div class="bg-option" data-type="color" data-value="#00ff00" style="background:#00ff00;" title="Green Screen"></div>
+        <div class="bg-option" data-type="color" data-value="#000000" style="background:#000000;" title="Black"></div>
+        <div class="bg-option color-picker" id="colorPickerBtn" title="Custom Color">Color</div>
+        <input type="color" id="bgColorInput">
+        <div class="bg-option" data-type="image" data-value="https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=400&q=80" style="background-image:url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=100&q=80')" title="Office"></div>
+        <div class="bg-option" data-type="image" data-value="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=400&q=80" style="background-image:url('https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=100&q=80')" title="Mountains"></div>
+    </div>
+
+    <div id="controls">
+        <button id="toggleMic" class="control-btn active" title="Toggle Microphone">
+            <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+        </button>
+        <button id="toggleVideo" class="control-btn active" title="Toggle Camera">
+            <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+        </button>
+        <button id="toggleScreen" class="control-btn" title="Share Screen">
+            <svg viewBox="0 0 24 24"><path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/></svg>
+        </button>
+        <button id="toggleBlur" class="control-btn" title="Background Options">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><circle cx="12" cy="12" r="5"/></svg>
+        </button>
+        <button id="leaveBtn" class="control-btn" title="Leave Call">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+        </button>
     </div>
   </div>
 
-  <canvas id="procCanvas"></canvas>
-
-  <div id="bgMenu">
-    <div class="bg-option none active" data-type="none" title="No Filter">None</div>
-    <div class="bg-option blur" data-type="blur" title="Blur Background"></div>
-    <div class="bg-option" data-type="color" data-value="#00ff00" style="background:#00ff00;" title="Green Screen"></div>
-    <div class="bg-option" data-type="color" data-value="#000000" style="background:#000000;" title="Black"></div>
-    <div class="bg-option color-picker" id="colorPickerBtn" title="Custom Color">Color</div>
-    <input type="color" id="bgColorInput">
-    <div class="bg-option" data-type="image" data-value="https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=400&q=80" style="background-image:url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=100&q=80')" title="Office"></div>
-    <div class="bg-option" data-type="image" data-value="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=400&q=80" style="background-image:url('https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=100&q=80')" title="Mountains"></div>
-  </div>
-
-  <div id="controls">
-    <button id="toggleMic" class="control-btn active" title="Toggle Microphone">
-        <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
-    </button>
-    <button id="toggleVideo" class="control-btn active" title="Toggle Camera">
-        <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
-    </button>
-    <button id="toggleScreen" class="control-btn" title="Share Screen">
-        <svg viewBox="0 0 24 24"><path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/></svg>
-    </button>
-    <button id="toggleBlur" class="control-btn" title="Background Options">
-        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><circle cx="12" cy="12" r="5"/></svg>
-    </button>
-    <button id="leaveBtn" class="control-btn" title="Leave Call">
-        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
-    </button>
-  </div>  <script>
+  <script>
     window.SFU_CONFIG = {
         signalingUrl: "${target}",
         targetCode: "${targetCode}",
